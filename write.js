@@ -126,7 +126,7 @@ function toHtml(doc, theme, meta, opt) {
     else if (b.t === 'li') h += `<p class="li k-${b.kind}" style="--lv:${b.level}" data-mark="${mark(b)}"${id}>${runsHtml(b.runs)}</p>`;
     else if (b.t === 'note') { const n = noteParts(b.runs); h += `<p class="note"${id}><b class="note-label" contenteditable="false">${esc(n.label)}</b>${runsHtml(n.runs)}</p>`; }
     else if (b.t === 'table') h += tableHtml(b.rows, b.id);
-    else if (b.t === 'img') h += `<figure><img src="${b.src}" alt=""></figure>`;
+    else if (b.t === 'img') h += `<figure><img src="${b.src}" alt="" data-img="${b.id}"></figure>`;
   }
   return h + '</section></article>';
 }
@@ -332,7 +332,7 @@ function splitParas(paras, w, h, pt) {
 function fit(img, x, y, w, h, alignX = 'center') {
   const k = Math.min(w / img.w, h / img.h);
   const iw = img.w * k, ih = img.h * k;
-  return { k: 'img', src: img.src, x: alignX === 'left' ? x : x + (w - iw) / 2, y: y + (h - ih) / 2, w: iw, h: ih };
+  return { k: 'img', src: img.src, bid: img.id, x: alignX === 'left' ? x : x + (w - iw) / 2, y: y + (h - ih) / 2, w: iw, h: ih };
 }
 function tableRowHeights(rows, colW, pt = 11) {
   return rows.map(r => Math.max(0.34, Math.max(...r.map((c, i) => textHeight([{ runs: [{ text: String(c) }] }], colW[i] - 0.12, pt))) + 0.1));
@@ -754,7 +754,7 @@ function slideHtml(s, theme, opt) {
     const box = `left:${px(it.x)};top:${px(it.y)};width:${px(it.w)};`;
     if (it.k === 'line') return `<div class="ln" style="${box}border-top:${it.pt}pt solid #${it.color}"></div>`;
     if (it.k === 'rect') return `<div style="${box}height:${px(it.h)};background:${it.fill ? '#' + it.fill : 'none'};${it.stroke ? `border:${it.pt}pt solid #${it.stroke}` : ''}"></div>`;
-    if (it.k === 'img') return `<img style="${box}height:${px(it.h)}" src="${it.src}" alt="">`;
+    if (it.k === 'img') return `<img style="${box}height:${px(it.h)}" src="${it.src}" alt=""${it.bid !== undefined ? ` data-img="${it.bid}"` : ''}>`;
     if (it.k === 'table') {
       return `<table class="stbl${theme.grid ? ' grid' : ''}" style="${box}--thead-line:#${theme.theadLine};--hair:#${theme.hair};--thead-fill:${theme.theadFill ? '#' + theme.theadFill : 'transparent'};color:#${theme.ink}">
         <colgroup>${it.colW.map(w => `<col style="width:${px(w)}">`).join('')}</colgroup>

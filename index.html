@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>문서 양식 변환 · 서울로봇인공지능과학관</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="doc.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap">
 <style>
@@ -77,6 +80,14 @@
   .zoom .doc > section { margin-bottom: 20px; padding: 25mm 22mm 20mm; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
   .zoom .doc.t-D > section { padding: 28mm 26mm 20mm; }
   .zoom .slide { margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+  /* 미리보기 사진 도구줄 */
+  .zoom [data-img] { cursor: grab; }
+  .zoom [data-img].drop-on { outline: 4px solid #1D4ED8; outline-offset: -4px; }
+  .imgbar { position: fixed; z-index: 10; display: flex; gap: 2px; padding: 4px; border-radius: 8px; background: rgba(28, 28, 30, .92); box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .imgbar button { padding: 6px 9px; border: 0; border-radius: 6px; background: none; color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .imgbar button:hover:not(:disabled) { background: rgba(255, 255, 255, .16); }
+  .imgbar button:disabled { opacity: .35; cursor: default; }
 
   @media (max-width: 900px) {
     .app { grid-template-columns: 1fr; height: auto; }
@@ -156,6 +167,13 @@
   <main class="preview">
     <div class="bar"><span><b id="barTitle">미리보기</b></span><span id="barInfo"></span></div>
     <div class="stage" id="stage"><div class="zoom" id="zoom"></div></div>
+    <div class="imgbar" id="imgbar" hidden>
+      <button type="button" data-act="prev" title="앞 사진과 자리 바꾸기">← 앞으로</button>
+      <button type="button" data-act="next" title="뒤 사진과 자리 바꾸기">뒤로 →</button>
+      <button type="button" data-act="replace" title="컴퓨터의 사진으로 바꾸기">사진 바꾸기</button>
+      <button type="button" data-act="remove" title="이 사진 빼기">빼기</button>
+    </div>
+    <input type="file" id="imgFile" accept="image/*" hidden>
   </main>
 </div>
 
@@ -289,7 +307,7 @@ function render() {
       zoom.innerHTML = toHtml(doc, theme, meta, opt);
       $('barInfo').textContent = `A4 세로 · ${theme.name} · 쪽 나눔은 Word에서 조금 달라질 수 있어요`;
     }
-    $('barInfo').textContent += ' · 글자를 눌러 바로 고칠 수 있어요';
+    $('barInfo').textContent += ' · 글자는 눌러서, 사진은 마우스를 올려서 고칠 수 있어요';
     $('barTitle').textContent = meta.title;
     for (const el of zoom.querySelectorAll('[data-bid], [data-cell], [data-meta]')) {
       el.dataset.edit = '';
@@ -363,6 +381,105 @@ zoomEl.addEventListener('keydown', e => {
   else if (e.key === 'Enter' && (single || e.ctrlKey || e.metaKey)) { e.preventDefault(); el.blur(); } // 문단은 Enter가 줄바꿈, Ctrl+Enter로 마침
 });
 zoomEl.addEventListener('click', e => { if (e.target.closest('a')) e.preventDefault(); }); // 링크 글자를 고칠 때 이동하지 않게
+
+// ---------- 미리보기에서 사진 바꾸기·순서 바꾸기 ----------
+// 사진 블록 자체를 옮기거나 바꾼다. 슬라이드의 설명 줄은 제자리에 있어서, 자리를 바꾸면 사진만 서로 바뀐다
+const imgBar = $('imgbar');
+let barImg = null, hideTimer;
+const imageSlots = () => doc.blocks.map((b, i) => b.t === 'img' ? i : -1).filter(i => i >= 0);
+const blockIndex = id => doc.blocks.findIndex(b => b.id === id);
+
+function swapImages(a, b) {
+  const i = blockIndex(a), j = blockIndex(b);
+  if (i < 0 || j < 0 || i === j) return;
+  [doc.blocks[i], doc.blocks[j]] = [doc.blocks[j], doc.blocks[i]];
+  hideBar();
+  render();
+}
+function moveImage(id, dir) {
+  const slots = imageSlots(), at = slots.indexOf(blockIndex(id));
+  if (slots[at + dir] !== undefined) swapImages(id, doc.blocks[slots[at + dir]].id);
+}
+async function replaceImage(id, file) {
+  const b = doc.blocks[blockIndex(id)];
+  if (!b || !file) return;
+  const im = await normImage(file);
+  if (!im) { alert('이 사진 파일은 열 수 없어요. JPG나 PNG로 올려주세요.'); return; }
+  Object.assign(b, { src: im.src, w: im.w, h: im.h });
+  hideBar();
+  render();
+}
+
+function showBar(img) {
+  barImg = img;
+  const id = +img.dataset.img, slots = imageSlots(), at = slots.indexOf(blockIndex(id));
+  imgBar.querySelector('[data-act=prev]').disabled = at <= 0;
+  imgBar.querySelector('[data-act=next]').disabled = at >= slots.length - 1;
+  imgBar.hidden = false;
+  const r = img.getBoundingClientRect(), bw = imgBar.offsetWidth, bh = imgBar.offsetHeight;
+  // 사진이 작으면 사진 위쪽 바깥에, 크면 사진 안쪽 위에
+  const inside = r.width >= bw + 16 && r.height >= bh + 24;
+  imgBar.style.left = Math.max(8, Math.min(innerWidth - bw - 8, inside ? r.left + 8 : r.left)) + 'px';
+  imgBar.style.top = Math.max(8, inside ? r.top + 8 : r.top - bh - 6) + 'px';
+}
+function hideBar() { imgBar.hidden = true; barImg = null; }
+
+zoomEl.addEventListener('mouseover', e => {
+  const img = e.target.closest('[data-img]');
+  if (!img) return;
+  clearTimeout(hideTimer);
+  if (img !== barImg) showBar(img);
+});
+zoomEl.addEventListener('mouseout', e => { if (e.target.closest('[data-img]')) hideTimer = setTimeout(hideBar, 300); });
+imgBar.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+imgBar.addEventListener('mouseleave', () => { hideTimer = setTimeout(hideBar, 300); });
+$('stage').addEventListener('scroll', hideBar);
+imgBar.addEventListener('click', e => {
+  const act = e.target.closest('button')?.dataset.act;
+  if (!act || !barImg) return;
+  const id = +barImg.dataset.img;
+  if (act === 'prev') moveImage(id, -1);
+  else if (act === 'next') moveImage(id, 1);
+  else if (act === 'replace') { $('imgFile').dataset.for = id; $('imgFile').click(); }
+  else if (act === 'remove' && confirm('이 사진을 뺄까요?')) { doc.blocks.splice(blockIndex(id), 1); hideBar(); render(); }
+});
+$('imgFile').addEventListener('change', e => {
+  replaceImage(+e.target.dataset.for, e.target.files[0]);
+  e.target.value = '';
+});
+
+// 사진을 다른 사진 위로 끌면 자리 바꾸기, 컴퓨터의 사진 파일을 끌어다 놓으면 교체
+let dragId = null;
+zoomEl.addEventListener('dragstart', e => {
+  const img = e.target.closest('[data-img]');
+  if (!img) return;
+  dragId = +img.dataset.img;
+  e.dataTransfer.effectAllowed = 'move';
+  hideBar();
+});
+zoomEl.addEventListener('dragend', () => { dragId = null; });
+zoomEl.addEventListener('dragover', e => {
+  const img = e.target.closest('[data-img]');
+  const files = [...e.dataTransfer.types].includes('Files');
+  if (!img || (dragId === null && !files) || +img.dataset.img === dragId) return;
+  e.preventDefault();
+  for (const el of zoomEl.querySelectorAll('.drop-on')) if (el !== img) el.classList.remove('drop-on');
+  img.classList.add('drop-on');
+});
+zoomEl.addEventListener('dragleave', e => e.target.closest?.('[data-img]')?.classList.remove('drop-on'));
+zoomEl.addEventListener('drop', e => {
+  const img = e.target.closest('[data-img]');
+  if (!img) return;
+  e.preventDefault();
+  img.classList.remove('drop-on');
+  const file = e.dataTransfer.files[0];
+  if (file) replaceImage(+img.dataset.img, file);
+  else if (dragId !== null) swapImages(dragId, +img.dataset.img);
+  dragId = null;
+});
+// 미리보기 밖에 파일을 잘못 놓아도 브라우저가 파일을 열어 버리지 않게
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => e.preventDefault());
 
 function fitZoom() {
   const zoom = $('zoom');
