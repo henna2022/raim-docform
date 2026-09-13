@@ -1,0 +1,80 @@
+/* 변환 결과 미리보기와 PDF 인쇄에 같이 쓰는 스타일. 값은 write.js THEMES와 맞춘다 */
+@font-face { font-family: Pretendard; src: url(vendor/PretendardVariable.woff2) format('woff2-variations'); font-weight: 45 920; font-display: swap; }
+
+.doc { font-family: var(--font), Pretendard, 'Malgun Gothic', sans-serif; font-size: 10pt; line-height: 1.5; color: var(--ink);
+  word-break: keep-all; overflow-wrap: break-word; background: #fff; }
+.doc * { box-sizing: border-box; }
+.doc p { margin: 0 0 1.4mm; }
+.doc a { color: var(--link); text-decoration: none; }
+.doc b { font-weight: 700; }
+
+/* 표지 */
+.page { break-after: page; }
+.cover { display: flex; flex-direction: column; min-height: 240mm; }
+.cover .org { margin: 24mm 0 0; font-size: 8.5pt; font-weight: 700; letter-spacing: .3em; color: var(--label); }
+.cover .band { margin: 6mm 0 0; padding: 4mm 3.5mm 9mm; background: var(--accent); color: #fff; font-size: 8.5pt; font-weight: 700; letter-spacing: .3em; }
+.cover .title { margin: 4mm 0 0; font-family: var(--head), Pretendard, serif; font-size: var(--title-pt); font-weight: 700; line-height: 1.3; }
+.cover .band + .title { margin-top: 24mm; }
+.cover .subtitle { margin: 2.5mm 0 0; font-size: 11pt; color: var(--sub); }
+.cover .cover-rule { width: 100%; margin: 3.5mm 0 0; border: 0; border-top: 1.5pt solid var(--accent); }
+.cover .meta { margin-top: auto; }
+.t-B .cover { text-align: center; }
+.t-B .cover .meta { text-align: left; }
+.t-B .cover .cover-rule, .t-C .cover .cover-rule { border-top-width: 1pt; }
+
+/* 제목 */
+.doc .h1 { margin: 9mm 0 3.5mm; padding-bottom: 1.5mm; border-bottom: var(--rule-w) solid var(--rule); font-family: var(--head), Pretendard, serif;
+  font-size: var(--h1-pt); font-weight: 700; break-after: avoid; }
+.doc .body > .h1:first-child, .front .h1:first-child { margin-top: 0; }
+.doc .h1 .num { margin-right: .35em; color: var(--accent); }
+.doc.t-D .h1 { padding-bottom: 0; }
+.doc.t-D .h1 .num { margin-right: .9em; font-family: var(--font), Pretendard, sans-serif; font-size: 15pt; color: var(--label); }
+.doc .h2 { margin: 5mm 0 2mm; font-family: var(--head), Pretendard, serif; font-size: 9.5pt; font-weight: 700; break-after: avoid; }
+.doc .h2 .num { margin-right: .35em; color: var(--accent); }
+.doc .h3 { margin: 3.5mm 0 1.5mm; font-size: 9.5pt; font-weight: 700; color: var(--sub); break-after: avoid; }
+
+/* 목록·주의 */
+.doc .li { position: relative; margin-bottom: .7mm; padding-left: calc(5mm + var(--lv) * 5mm); }
+.doc .li::before { content: attr(data-mark); position: absolute; left: calc(var(--lv) * 5mm); color: var(--label); }
+.doc .li.k-num::before, .doc .li.k-check::before { color: var(--ink); }
+.doc .note { margin: 5.5mm 0 2mm; padding-left: 3.5mm; border-left: 1.5pt solid var(--accent); }
+.doc .note-label { margin-right: .6em; font-size: 8pt; color: var(--accent); }
+.doc.t-A .note-label { color: var(--label); }
+
+/* 표 */
+.doc .tbl { width: 100%; margin: 2mm 0 4mm; border-collapse: collapse; }
+.doc .tbl th { padding: 1mm 2.5mm 1mm 0; border-bottom: var(--thead-w) solid var(--thead-line); background: var(--thead-fill);
+  font-size: 8pt; font-weight: 700; color: var(--label); text-align: left; vertical-align: bottom; }
+.doc .tbl td { padding: 1mm 2.5mm 1mm 0; border-bottom: .5pt solid var(--hair); vertical-align: top; }
+.doc .tbl tr { break-inside: avoid; }
+.doc .tbl td:empty::before { content: '\00a0'; }
+.doc .tbl tbody tr:last-child td { border-bottom: 0; }
+.doc.t-B .tbl { border: .5pt solid var(--thead-line); }
+.doc.t-B .tbl th, .doc.t-B .tbl td { padding: 1mm 2mm; border: .5pt solid var(--hair); }
+
+.doc figure { margin: 2mm 0 4mm; break-inside: avoid; }
+.doc figure img { display: block; max-width: 100%; max-height: 120mm; }
+
+.front .toc-head { margin-top: 12mm; }
+.toc { margin: 0; padding: 0; list-style: none; }
+.toc li { padding: 1.3mm 0; border-bottom: .5pt solid var(--hair); }
+.toc .l2 { padding-left: 6mm; color: var(--sub); }
+.toc .num { display: inline-block; min-width: 9mm; color: var(--label); }
+
+/* 슬라이드 (1280×720 = 13.333in × 7.5in) */
+.slide { position: relative; width: 1280px; height: 720px; overflow: hidden; background: #fff; word-break: keep-all; overflow-wrap: break-word; }
+.slide > * { position: absolute; box-sizing: border-box; margin: 0; }
+.slide .ln { height: 0; }
+.slide .tx { display: flex; flex-direction: column; line-height: 1.3; }
+.slide .tx p { margin: 0 0 5pt; }
+.slide .tx p:last-child { margin-bottom: 0; }
+.slide a { color: inherit; text-decoration: none; }
+.slide .stbl { border-collapse: collapse; table-layout: fixed; font-size: 11pt; }
+.slide .stbl th { padding: 0 .08in 0 0; border-bottom: .75pt solid var(--thead-line); background: var(--thead-fill); font-size: 10pt; text-align: left; }
+.slide .stbl td { padding: 0 .08in 0 0; border-bottom: .75pt solid var(--hair); }
+.slide .stbl tr:last-child td { border-bottom: 0; }
+.slide .stbl.grid th, .slide .stbl.grid td { padding: 0 .08in; border: .75pt solid var(--hair); }
+
+@media print {
+  .doc { background: none; }
+}

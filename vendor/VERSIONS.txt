@@ -1,0 +1,7 @@
+mammoth 1.12.3 BSD-2-Clause
+jszip 3.10.2 (MIT OR GPL-3.0-or-later)
+docx 9.7.1 MIT
+pptxgenjs 4.0.1 MIT
+cfb 1.2.2 Apache-2.0
+pretendard 1.3.9 OFL-1.1
+Paperlogy 400/700 OFL-1.1 (smartfarm-lab ttf를 woff2로 변환)

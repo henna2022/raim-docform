@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문서 양식 변환 · 서울로봇인공지능과학관</title>
+<link rel="stylesheet" href="doc.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap">
+<style>
+  /* 화면 글꼴은 페이퍼로지, 변환 결과 문서는 양식 글꼴(doc.css) */
+  @font-face { font-family: Paperlogy; src: url(vendor/Paperlogy-400.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: Paperlogy; src: url(vendor/Paperlogy-700.woff2) format('woff2'); font-weight: 700; font-display: swap; }
+  :root { --ink: #1C1C1E; --sub: #6B7280; --label: #9CA3AF; --line: #E5E7EB; --hair: #ECEEF1; --bg: #F4F5F7; --warn: #B45309; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font-family: Paperlogy, Pretendard, 'Malgun Gothic', sans-serif; font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--bg); word-break: keep-all; }
+  button, input, select { font: inherit; color: inherit; }
+
+  .app { display: grid; grid-template-columns: 400px 1fr; height: 100vh; }
+  .panel { overflow-y: auto; padding: 28px 28px 40px; background: #fff; border-right: 1px solid var(--line); }
+  .panel header { margin-bottom: 28px; }
+  .panel header p { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .25em; color: var(--label); }
+  .panel header h1 { margin: 6px 0 0; font-size: 22px; line-height: 1.3; }
+
+  .step { padding: 20px 0; border-top: 1px solid var(--hair); }
+  .step h2 { margin: 0 0 12px; font-size: 13px; font-weight: 700; }
+  .step h2 span { display: inline-block; width: 18px; color: var(--label); }
+  .hint { margin: 8px 0 0; font-size: 12px; color: var(--sub); }
+
+  .drop { display: block; padding: 22px 16px; border: 1px dashed #C9CED5; border-radius: 8px; text-align: center; cursor: pointer; }
+  .drop:hover, .drop.over { border-color: var(--ink); background: #FAFAFB; }
+  .drop strong { display: block; font-size: 14px; }
+  .drop span { display: block; margin-top: 2px; font-size: 12px; color: var(--sub); }
+  .file { margin: 10px 0 0; font-size: 13px; }
+  .file.error { color: #B91C1C; }
+  .warns { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--warn); }
+  .warns li { margin-top: 3px; }
+
+  .themes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .theme { position: relative; display: block; cursor: pointer; }
+  .theme input { position: absolute; opacity: 0; }
+  .theme img { display: block; width: 100%; aspect-ratio: 440 / 309; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; }
+  .theme b { display: block; margin-top: 6px; font-size: 13px; }
+  .theme small { display: block; font-size: 11.5px; line-height: 1.4; color: var(--sub); }
+  .theme input:checked ~ img { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .theme input:focus-visible ~ img { outline: 2px solid #1D4ED8; outline-offset: 2px; }
+
+  .field { display: block; margin-bottom: 10px; }
+  .field span { display: block; margin-bottom: 3px; font-size: 12px; color: var(--sub); }
+  .field input, .field select { width: 100%; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .field input:focus, .field select:focus { border-color: var(--ink); outline: none; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  details { margin: 4px 0 10px; }
+  summary { cursor: pointer; font-size: 13px; color: var(--sub); }
+  details[open] summary { margin-bottom: 10px; }
+  .checks { display: flex; gap: 16px; margin-top: 4px; font-size: 13px; }
+  .checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg label { cursor: pointer; }
+  .seg input { position: absolute; opacity: 0; }
+  .seg span { display: block; padding: 9px 0; text-align: center; font-size: 13px; }
+  .seg label + label span { border-left: 1px solid var(--line); }
+  .seg input:checked + span { background: var(--ink); color: #fff; font-weight: 700; }
+  .seg input:focus-visible + span { outline: 2px solid #1D4ED8; outline-offset: -2px; }
+  .go { width: 100%; height: 46px; margin-top: 14px; border: 0; border-radius: 8px; background: var(--ink); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .go:disabled { opacity: .5; cursor: progress; }
+
+  .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .bar { display: flex; justify-content: space-between; gap: 12px; padding: 14px 28px; font-size: 12px; color: var(--sub); border-bottom: 1px solid var(--line); background: var(--bg); }
+  .bar b { color: var(--ink); }
+  .stage { flex: 1; min-height: 0; overflow: auto; padding: 24px 28px 60px; }
+  .zoom { margin: 0 auto; transform-origin: top left; }
+  .zoom .doc { background: none; }
+  .zoom .doc > section { margin-bottom: 20px; padding: 25mm 22mm 20mm; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .zoom .doc.t-D > section { padding: 28mm 26mm 20mm; }
+  .zoom .slide { margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    .panel { border-right: 0; }
+    .stage { min-height: 70vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <header>
+      <p>서울로봇인공지능과학관</p>
+      <h1>문서 양식 변환</h1>
+    </header>
+
+    <section class="step">
+      <h2><span>1</span>문서 올리기</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".docx,.pptx,.hwpx,.hwp" hidden>
+        <strong>파일을 끌어다 놓거나 눌러서 고르기</strong>
+        <span>Word(docx) · PowerPoint(pptx) · 한글(hwpx, hwp)</span>
+      </label>
+      <p class="hint">한글(hwp) 파일은 표 모양과 글자 서식이 깨질 수 있어요. 한글에서 hwpx로 저장해서 올리면 더 잘 옮겨져요.</p>
+      <p class="hint">파일은 이 컴퓨터의 브라우저 안에서만 바뀌고, 어디에도 올라가지 않아요.</p>
+      <p class="file" id="fileinfo">아직 올린 파일이 없어서 견본 문서로 보여드려요.</p>
+      <ul class="warns" id="warns"></ul>
+    </section>
+
+    <section class="step">
+      <h2><span>2</span>양식 고르기</h2>
+      <div class="themes" id="themes"></div>
+    </section>
+
+    <section class="step">
+      <h2><span>3</span>표지 정보</h2>
+      <label class="field"><span>문서 제목</span><input id="title"></label>
+      <label class="field"><span>부제</span><input id="subtitle" placeholder="예: 유지보수 매뉴얼 ② 기기매뉴얼"></label>
+      <details>
+        <summary>문서번호 · 작성자 등 더 적기</summary>
+        <div class="grid2">
+          <label class="field"><span>문서번호</span><input id="docNo" placeholder="RAIM-MN-2026-001"></label>
+          <label class="field"><span>버전</span><input id="version" value="v1.0"></label>
+          <label class="field"><span>작성일</span><input id="date" type="date"></label>
+          <label class="field"><span>작성부서</span><input id="dept" data-keep></label>
+          <label class="field"><span>작성자</span><input id="author" data-keep></label>
+          <label class="field"><span>승인자</span><input id="approver"></label>
+        </div>
+        <label class="field"><span>글꼴</span>
+          <select id="font" data-keep>
+            <option value="pretendard">Pretendard (과학관 기본)</option>
+            <option value="malgun">맑은 고딕 (Pretendard가 없는 PC용)</option>
+          </select>
+        </label>
+      </details>
+      <div class="checks">
+        <label><input type="checkbox" id="cover" checked> 표지</label>
+        <label><input type="checkbox" id="front" checked> 개정 이력 · 목차</label>
+      </div>
+    </section>
+
+    <section class="step">
+      <h2><span>4</span>받을 형식</h2>
+      <div class="seg" id="formats">
+        <label><input type="radio" name="format" value="docx" checked><span>Word</span></label>
+        <label><input type="radio" name="format" value="pptx"><span>PowerPoint</span></label>
+        <label><input type="radio" name="format" value="pdf"><span>PDF</span></label>
+      </div>
+      <p class="hint" id="formatHint"></p>
+      <button class="go" id="go">변환해서 받기</button>
+    </section>
+  </aside>
+
+  <main class="preview">
+    <div class="bar"><span><b id="barTitle">미리보기</b></span><span id="barInfo"></span></div>
+    <div class="stage" id="stage"><div class="zoom" id="zoom"></div></div>
+  </main>
+</div>
+
+<script src="vendor/mammoth.browser.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/cfb.min.js"></script>
+<script src="vendor/docx.iife.js"></script>
+<script src="vendor/pptxgen.bundle.js"></script>
+<script src="read.js"></script>
+<script src="write.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const r = text => [{ text }];
+
+// 올리기 전에 양식 차이를 보여줄 견본
+const SAMPLE = { title: '전시물 운영 매뉴얼', subtitle: '견본 문서입니다', warnings: [], blocks: [
+  { t: 'h', level: 1, text: '개요' },
+  { t: 'h', level: 2, text: '목적' },
+  { t: 'p', runs: r('이 매뉴얼은 전시물을 켜고 끄는 순서와 점검 방법을 정리한 문서입니다. 새로 온 직원도 이 순서대로 하면 같은 결과가 나오도록 적습니다.') },
+  { t: 'h', level: 2, text: '적용 범위' },
+  { t: 'li', kind: 'bullet', level: 0, list: 1, runs: r('3층 상설전시 전시물 전체') },
+  { t: 'li', kind: 'bullet', level: 0, list: 1, runs: r('기획전시는 담당자가 따로 정합니다') },
+  { t: 'h', level: 1, text: '업무 절차' },
+  { t: 'h', level: 2, text: '절차 표' },
+  { t: 'table', rows: [['단계', '담당', '내용', '비고'], ['1', '운영자', '전원과 네트워크를 켭니다', '매일 09:20'], ['2', '운영자', '전시물 화면이 첫 장면인지 봅니다', ''], ['3', '해설사', '이상이 있으면 조치 매뉴얼을 봅니다', '']] },
+  { t: 'h', level: 2, text: '점검 항목' },
+  { t: 'li', kind: 'check', level: 0, list: 0, runs: r('전원과 네트워크 상태 확인') },
+  { t: 'li', kind: 'check', level: 0, list: 0, runs: r('화면이 첫 장면으로 돌아왔는지 확인') },
+  { t: 'note', runs: r('주의 전원을 끌 때는 반드시 PC부터 끄고 멀티탭을 내립니다.') },
+  { t: 'h', level: 1, text: '참고' },
+  { t: 'p', runs: [{ text: '관련 링크는 이렇게 표시합니다. 예: ' }, { text: 'raim-guide.vercel.app', href: 'https://raim-guide.vercel.app' }] },
+] };
+
+let doc = SAMPLE;
+const store = {
+  get(k) { try { return localStorage.getItem('docform.' + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('docform.' + k, v); } catch {} },
+};
+
+// 양식 카드
+$('themes').innerHTML = Object.values(THEMES).map(t => `
+  <label class="theme"><input type="radio" name="theme" value="${t.key}"${t.key === (store.get('theme') || 'A') ? ' checked' : ''}>
+    <img src="img/theme-${t.key}.jpg" alt="${t.name} 양식 예시"><b>${t.name}</b><small>${t.desc}</small></label>`).join('');
+
+const today = new Date();
+$('date').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+$('title').value = SAMPLE.title;
+$('subtitle').value = SAMPLE.subtitle;
+for (const el of document.querySelectorAll('[data-keep]')) { const v = store.get(el.id); if (v) el.value = v; }
+const savedFormat = store.get('format');
+if (savedFormat) document.querySelector(`[name=format][value=${savedFormat}]`).checked = true;
+
+function state() {
+  const [y, m, d] = $('date').value.split('-');
+  const meta = { title: $('title').value.trim() || doc.title, subtitle: $('subtitle').value.trim(), docNo: $('docNo').value.trim(), version: $('version').value.trim(),
+    date: $('date').value, dateText: y ? `${+y}년 ${+m}월 ${+d}일` : '', dept: $('dept').value.trim(), author: $('author').value.trim(), approver: $('approver').value.trim() };
+  const opt = { cover: $('cover').checked, front: $('front').checked, font: $('font').value };
+  const theme = THEMES[document.querySelector('[name=theme]:checked').value];
+  const format = document.querySelector('[name=format]:checked').value;
+  return { meta, opt, theme, format };
+}
+
+const HINTS = {
+  docx: 'Word로 열 때 "필드를 업데이트할까요?"가 뜨면 "예"를 누르세요. 목차가 채워져요.',
+  pptx: '16:9 슬라이드로 만들어요. 사진 한 장은 왼쪽 사진, 오른쪽 설명으로 놓여요.',
+  pdf: '인쇄 창이 뜨면 대상에서 "PDF로 저장"을 고르세요.',
+};
+
+let timer;
+function render() {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    const { meta, opt, theme, format } = state();
+    $('formatHint').textContent = HINTS[format];
+    const zoom = $('zoom');
+    if (format === 'pptx') {
+      zoom.innerHTML = slidesHtml(doc, theme, meta, opt);
+      $('barInfo').textContent = `슬라이드 ${zoom.children.length}장 · ${theme.name}`;
+    } else {
+      zoom.innerHTML = toHtml(doc, theme, meta, opt);
+      $('barInfo').textContent = `A4 세로 · ${theme.name} · 쪽 나눔은 Word에서 조금 달라질 수 있어요`;
+    }
+    $('barTitle').textContent = meta.title;
+    fitZoom();
+  }, 120);
+}
+
+function fitZoom() {
+  const zoom = $('zoom');
+  const base = zoom.querySelector('.slide') ? 1280 : 794;
+  const avail = $('stage').clientWidth - 56;
+  zoom.style.width = base + 'px';
+  zoom.style.zoom = Math.min(1, avail / base);
+}
+addEventListener('resize', fitZoom);
+
+async function load(file) {
+  $('fileinfo').className = 'file';
+  $('fileinfo').textContent = `${file.name} 읽는 중…`;
+  $('warns').innerHTML = '';
+  try {
+    doc = await readDocument(file);
+    $('title').value = doc.title;
+    $('subtitle').value = doc.subtitle || '';
+    $('docNo').value = ''; $('approver').value = ''; $('version').value = 'v1.0';
+    for (const [k, v] of Object.entries(doc.meta || {})) $(k).value = v;
+    const count = t => doc.blocks.filter(b => b.t === t).length;
+    $('fileinfo').textContent = `${file.name} · 제목 ${count('h')} · 표 ${count('table')} · 그림 ${count('img')}`;
+    $('warns').innerHTML = doc.warnings.map(w => `<li>${esc(w)}</li>`).join('');
+    render();
+  } catch (e) {
+    console.error(e);
+    doc = SAMPLE;
+    $('fileinfo').className = 'file error';
+    $('fileinfo').textContent = e.message.match(/[가-힣]/) ? e.message : `읽지 못했어요. 파일이 손상됐거나 지원하지 않는 형식이에요. (${e.message})`;
+    render();
+  }
+}
+
+$('file').addEventListener('change', e => e.target.files[0] && load(e.target.files[0]));
+const drop = $('drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
+
+document.querySelector('.panel').addEventListener('input', e => {
+  if (e.target.name === 'theme' || e.target.name === 'format') store.set(e.target.name, e.target.value);
+  if (e.target.dataset.keep !== undefined) store.set(e.target.id, e.target.value);
+  if (e.target.id !== 'file') render();
+});
+
+function save(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+
+// 인쇄용 문서. 꼬리말(제목·쪽번호)은 @page 여백 칸에 넣는다
+function pdfHtml(theme, meta, opt) {
+  const css = s => '"' + String(s).replace(/["\\]/g, '\\$&') + '"';
+  const box = `font:7.5pt Pretendard,sans-serif;color:#${theme.label};vertical-align:top;padding-top:3mm;border-top:.5pt solid #${theme.hair}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
+    <link rel="stylesheet" href="doc.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap">
+    <style>body{margin:0}
+    @page{size:A4;margin:${theme.wide ? '28mm 26mm 20mm' : '25mm 22mm 20mm'};@bottom-left{content:${css(meta.title)};${box}}@bottom-right{content:counter(page);${box}}}
+    ${opt.cover ? '@page:first{@bottom-left{content:none;border:0}@bottom-right{content:none;border:0}}' : ''}</style></head>
+    <body>${toHtml(doc, theme, meta, opt)}</body></html>`;
+}
+
+function printPdf(theme, meta, opt) {
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+  frame.srcdoc = pdfHtml(theme, meta, opt);
+  frame.onload = async () => {
+    const w = frame.contentWindow;
+    await w.document.fonts.ready;
+    await Promise.all([...w.document.images].map(i => i.decode().catch(() => {})));
+    const old = document.title;
+    document.title = meta.title;
+    w.focus();
+    w.print();
+    document.title = old;
+    setTimeout(() => frame.remove(), 1000);
+  };
+  document.body.appendChild(frame);
+}
+
+$('go').addEventListener('click', async () => {
+  const { meta, opt, theme, format } = state();
+  const name = `${meta.title}_${theme.key}양식`.replace(/[\\/:*?"<>|]/g, '_');
+  const btn = $('go');
+  btn.disabled = true;
+  btn.textContent = '만드는 중…';
+  try {
+    if (format === 'docx') save(await toDocx(doc, theme, meta, opt), name + '.docx');
+    else if (format === 'pptx') save(await toPptx(doc, theme, meta, opt), name + '.pptx');
+    else printPdf(theme, meta, opt);
+  } catch (e) {
+    console.error(e);
+    alert('만들다가 문제가 생겼어요: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '변환해서 받기';
+  }
+});
+
+render();
+</script>
+</body>
+</html>
