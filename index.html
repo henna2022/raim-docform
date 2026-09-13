@@ -110,6 +110,14 @@
       <h2><span>2</span>양식 고르기</h2>
       <p class="hint" id="themeHint" hidden style="margin:-4px 0 12px">PowerPoint 파일이라 사진 매뉴얼용 슬라이드 양식을 보여드려요.</p>
       <div class="themes" id="themes"></div>
+      <label class="field" style="margin:14px 0 0"><span>글꼴</span>
+        <select id="font" data-keep>
+          <option value="pretendard">Pretendard (기본)</option>
+          <option value="malgun">맑은 고딕</option>
+          <option value="paperlogy">페이퍼로지</option>
+        </select>
+      </label>
+      <p class="hint">받는 파일을 여는 PC에 그 글꼴이 설치돼 있어야 그대로 보여요. 맑은 고딕은 윈도우에 기본으로 있어요.</p>
     </section>
 
     <section class="step">
@@ -126,12 +134,6 @@
           <label class="field"><span>작성자</span><input id="author" data-keep></label>
           <label class="field"><span>승인자</span><input id="approver"></label>
         </div>
-        <label class="field"><span>글꼴</span>
-          <select id="font" data-keep>
-            <option value="pretendard">Pretendard (과학관 기본)</option>
-            <option value="malgun">맑은 고딕 (Pretendard가 없는 PC용)</option>
-          </select>
-        </label>
       </details>
       <div class="checks">
         <label><input type="checkbox" id="cover" checked> 표지</label>
@@ -196,7 +198,24 @@ const DECK_SAMPLE = { title: '3층 상설전시 ON / OFF 매뉴얼', source: 'pp
   { t: 'h', level: 2, text: 'ON · 앨리스', repeat: true }, PHOTO(300, 400), { t: 'p', runs: r('창고 안쪽 파워서플라이의 PC 전원 버튼을 누릅니다.') },
 ] };
 
+for (const d of [SAMPLE, DECK_SAMPLE]) d.blocks = d.blocks.map((b, id) => ({ ...b, id }));
 let doc = SAMPLE;
+
+// 표지 로고(컬러, 남색 띠 위에 쓰는 흰색)
+let LOGO = null, LOGO_WHITE = null;
+const loadImage = src => new Promise(ok => {
+  const im = new Image();
+  im.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = im.naturalWidth; c.height = im.naturalHeight;
+    c.getContext('2d').drawImage(im, 0, 0);
+    ok({ src: c.toDataURL('image/png'), w: c.width, h: c.height });
+  };
+  im.onerror = () => ok(null);
+  im.src = src;
+});
+Promise.all([loadImage('img/logo.png'), loadImage('img/logo-white.png')]).then(([a, b]) => { if (a && b) { LOGO = a; LOGO_WHITE = b; render(); } });
+
 const store = {
   get(k) { try { return localStorage.getItem('docform.' + k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem('docform.' + k, v); } catch {} },
@@ -242,7 +261,7 @@ function state() {
   const [y, m, d] = $('date').value.split('-');
   const meta = { title: $('title').value.trim() || doc.title, subtitle: $('subtitle').value.trim(), docNo: $('docNo').value.trim(), version: $('version').value.trim(),
     date: $('date').value, dateText: y ? `${+y}년 ${+m}월 ${+d}일` : '', dept: $('dept').value.trim(), author: $('author').value.trim(), approver: $('approver').value.trim(),
-    extra: doc.meta?.extra || [] };
+    extra: doc.meta?.extra || [], logo: LOGO, logoWhite: LOGO_WHITE };
   const opt = { cover: $('cover').checked, front: $('front').checked, font: $('font').value };
   const theme = ALL_THEMES[document.querySelector('[name=theme]:checked').value];
   const format = document.querySelector('[name=format]:checked').value;
@@ -270,10 +289,80 @@ function render() {
       zoom.innerHTML = toHtml(doc, theme, meta, opt);
       $('barInfo').textContent = `A4 세로 · ${theme.name} · 쪽 나눔은 Word에서 조금 달라질 수 있어요`;
     }
+    $('barInfo').textContent += ' · 글자를 눌러 바로 고칠 수 있어요';
     $('barTitle').textContent = meta.title;
+    for (const el of zoom.querySelectorAll('[data-bid], [data-cell], [data-meta]')) {
+      el.dataset.edit = '';
+      try { el.contentEditable = 'plaintext-only'; } catch { el.contentEditable = 'true'; }
+      el.spellcheck = false;
+    }
     fitZoom();
   }, 120);
 }
+
+// ---------- 미리보기에서 고치기 ----------
+// 고친 글은 문서 구조(doc)에 되돌려 넣고 다시 그린다. 그래서 양식을 바꾸거나 받을 때도 그대로 남는다
+function editedText(el) {
+  let s = '';
+  const walk = node => {
+    for (const n of node.childNodes) {
+      if (n.nodeType === 3) s += n.textContent;
+      else if (n.nodeName === 'BR') s += '\n';
+      else if (n.nodeType === 1 && n.getAttribute('contenteditable') !== 'false') {
+        if (n.nodeName === 'DIV' && s && !s.endsWith('\n')) s += '\n';
+        walk(n);
+      }
+    }
+  };
+  walk(el);
+  return s.replace(/\u00a0/g, ' ').trim();
+}
+
+function commitEdit(el) {
+  const text = editedText(el);
+  const { bid, cell, meta } = el.dataset;
+  if (meta) {
+    if ($(meta).value.trim() === text) return;
+    $(meta).value = text;
+  } else if (cell) {
+    const [id, r, c] = cell.split(':').map(Number);
+    const b = doc.blocks.find(x => x.id === id);
+    if (!b || b.rows[r][c] === text) return;
+    b.rows[r][c] = text;
+  } else {
+    const i = doc.blocks.findIndex(x => x.id === +bid);
+    const b = doc.blocks[i];
+    if (!b) return;
+    if (b.t === 'h') {
+      const old = b.text;
+      if (!text || text === old || text === old.replace(NUM_RE, '').trim()) return;
+      b.text = text;
+      // 단계 슬라이드처럼 같은 제목이 이어지는 제목도 같이 바꾼다
+      for (const x of doc.blocks.slice(i + 1).filter(x => x.t === 'h')) { if (x.repeat && x.text === old) x.text = text; else break; }
+    } else {
+      const n = b.t === 'note' && noteParts(b.runs);
+      if (text === runsText(n ? n.runs : b.runs).trim()) return;
+      if (!text) doc.blocks.splice(i, 1); // 다 지우면 문단을 뺀다
+      else b.runs = [{ text: n ? `${n.label} ${text}` : text }];
+    }
+  }
+  render();
+}
+
+const zoomEl = $('zoom');
+zoomEl.addEventListener('focusout', e => {
+  const el = e.target;
+  if (el.dataset?.edit === undefined) return;
+  if (el.dataset.cancel) render(); else commitEdit(el);
+});
+zoomEl.addEventListener('keydown', e => {
+  const el = e.target;
+  if (el.dataset?.edit === undefined || e.isComposing) return; // 한글 조합 중 Enter는 글자 확정
+  const single = el.dataset.meta || el.dataset.cell || doc.blocks.find(x => x.id === +el.dataset.bid)?.t === 'h';
+  if (e.key === 'Escape') { el.dataset.cancel = '1'; el.blur(); }
+  else if (e.key === 'Enter' && (single || e.ctrlKey || e.metaKey)) { e.preventDefault(); el.blur(); } // 문단은 Enter가 줄바꿈, Ctrl+Enter로 마침
+});
+zoomEl.addEventListener('click', e => { if (e.target.closest('a')) e.preventDefault(); }); // 링크 글자를 고칠 때 이동하지 않게
 
 function fitZoom() {
   const zoom = $('zoom');

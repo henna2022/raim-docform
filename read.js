@@ -22,6 +22,7 @@ async function readDocument(file) {
   detectNotes(doc);
   if (!doc.title) doc.title = file.name.replace(/\.[^.]+$/, '');
   if (!doc.blocks.length) doc.warnings.push('문서에서 내용을 찾지 못했어요.');
+  doc.blocks = doc.blocks.map((b, id) => ({ ...b, id })); // 미리보기에서 고친 글을 되돌려 넣을 번호
   return doc;
 }
 
@@ -53,15 +54,45 @@ async function normImage(blob, { rot = 0, crop } = {}) {
   const k = Math.min(1, MAX_IMG / Math.max(sw, sh));
   const dw = Math.round(sw * k), dh = Math.round(sh * k);
   const [cw, ch] = quarter % 2 ? [dh, dw] : [dw, dh];
-  const c = document.createElement('canvas');
+  let c = document.createElement('canvas');
   c.width = cw; c.height = ch;
-  const g = c.getContext('2d');
+  const g = c.getContext('2d', { willReadFrequently: true });
   g.translate(cw / 2, ch / 2);
   g.rotate(quarter * Math.PI / 2);
   g.drawImage(bmp, sx, sy, sw, sh, -dw / 2, -dh / 2, dw, dh);
+  const box = trimBox(g.getImageData(0, 0, cw, ch));
+  if (box) {
+    const t = document.createElement('canvas');
+    t.width = box.w; t.height = box.h;
+    t.getContext('2d').drawImage(c, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
+    c = t;
+  }
   const png = blob.type === 'image/png' || blob.type === 'image/gif';
   const src = c.toDataURL(png ? 'image/png' : 'image/jpeg', 0.88);
-  return { t: 'img', src, w: cw, h: ch };
+  return { t: 'img', src, w: c.width, h: c.height };
+}
+
+// 사진 둘레에 박힌 흰색·연회색 여백(원본 슬라이드에서 틀을 맞추느라 채운 띠)을 찾아 잘라낼 범위를 돌려준다.
+// 한 줄 전체가 같은 밝은 색일 때만 여백으로 보고, 한 변에서 35%까지만 자른다
+function trimBox({ data, width: w, height: h }) {
+  const plain = (x0, y0, dx, dy, n) => {
+    const i0 = (y0 * w + x0) * 4, r = data[i0], g = data[i0 + 1], b = data[i0 + 2];
+    if (data[i0 + 3] < 250 || (r + g + b) / 3 < 232 || Math.max(r, g, b) - Math.min(r, g, b) > 12) return false;
+    for (let k = 0; k < n; k += Math.max(1, n >> 6)) {
+      const i = ((y0 + dy * k) * w + x0 + dx * k) * 4;
+      if (Math.abs(data[i] - r) > 10 || Math.abs(data[i + 1] - g) > 10 || Math.abs(data[i + 2] - b) > 10) return false;
+    }
+    return true;
+  };
+  let l = 0, r = w - 1, t = 0, b = h - 1;
+  while (l < w * 0.35 && plain(l, 0, 0, 1, h)) l++;
+  while (r > w * 0.65 && plain(r, 0, 0, 1, h)) r--;
+  while (t < h * 0.35 && plain(0, t, 1, 0, w)) t++;
+  while (b > h * 0.65 && plain(0, b, 1, 0, w)) b--;
+  if (!l && !t && r === w - 1 && b === h - 1) return null;
+  // 경계의 번진 한 줄까지 걷어낸다
+  if (l) l++; if (t) t++; if (r < w - 1) r--; if (b < h - 1) b--;
+  return { x: l, y: t, w: r - l + 1, h: b - t + 1 };
 }
 
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp', svg: 'image/svg+xml' };

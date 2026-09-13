@@ -25,8 +25,10 @@ const ORG = '서울로봇인공지능과학관';
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const NUM_RE = /^\s*(chapter\s*\d+[.:]?|제\s*\d+\s*[장절편부][.:]?|\d+(\.\d+)*[.)]?|[IVX]+\.|[①-⑳]|[가-하][.)])\s+/i;
 
+// 페이퍼로지는 굵기마다 글꼴 이름이 따로라 Office에는 "Paperlogy 4 Regular"로 넣는다 (doc.css에 같은 이름으로 연결)
+const FONT_NAMES = { pretendard: 'Pretendard', malgun: '맑은 고딕', paperlogy: 'Paperlogy 4 Regular' };
 function fonts(theme, opt) {
-  const body = opt.font === 'malgun' ? '맑은 고딕' : 'Pretendard';
+  const body = FONT_NAMES[opt.font] || 'Pretendard';
   const head = theme.serif ? (opt.font === 'malgun' ? '바탕' : 'Nanum Myeongjo') : body;
   return { body, head };
 }
@@ -88,22 +90,27 @@ function runsHtml(runs) {
     if (r.color || r.size || r.font) h = `<span style="${r.color ? `color:#${r.color};` : ''}${r.size ? `font-size:${r.size}pt;` : ''}${r.font ? `font-family:'${r.font}',Pretendard,serif;` : ''}">${h}</span>`;
     if (r.b) h = `<b>${h}</b>`;
     if (r.href) h = `<a href="${esc(r.href)}">${h}</a>`;
+    if (r.pre) h = `<span contenteditable="false">${h}</span>`; // 목록 기호·주의 라벨은 고치는 글에서 뺀다
     return h;
   }).join('');
 }
 
-function tableHtml(rows) {
-  const cell = (tag, c) => `<${tag}>${esc(c).replace(/\n/g, '<br>')}</${tag}>`;
-  return `<table class="tbl"><thead><tr>${rows[0].map(c => cell('th', c)).join('')}</tr></thead><tbody>${rows.slice(1).map(r => `<tr>${r.map(c => cell('td', c)).join('')}</tr>`).join('')}</tbody></table>`;
+// bid가 있으면 칸마다 data-cell="블록:행:열" (미리보기 편집용)
+function tableHtml(rows, bid, ris) {
+  const cell = (tag, c, ri, ci) => `<${tag}${bid !== undefined ? ` data-cell="${bid}:${ris ? ris[ri] : ri}:${ci}"` : ''}>${esc(c).replace(/\n/g, '<br>')}</${tag}>`;
+  return `<table class="tbl"><thead><tr>${rows[0].map((c, ci) => cell('th', c, 0, ci)).join('')}</tr></thead><tbody>${rows.slice(1).map((r, ri) => `<tr>${r.map((c, ci) => cell('td', c, ri + 1, ci)).join('')}</tr>`).join('')}</tbody></table>`;
 }
+
+// 표지의 기관명 자리에 넣는 로고. meta.logo가 없으면 글자로
+const logoHtml = (meta, white) => meta.logo ? `<img class="logo" src="${(white ? meta.logoWhite : meta.logo).src}" alt="${ORG}">` : ORG;
 
 function toHtml(doc, theme, meta, opt) {
   const blocks = outline(doc, theme);
   const mark = listMarker();
   let h = `<article class="doc t-${theme.key}" style="${themeVars(theme, opt)}">`;
   if (opt.cover) {
-    h += `<section class="page cover">${theme.band ? `<div class="band">${ORG}</div>` : `<p class="org">${ORG}</p>`}
-      <h1 class="title">${esc(meta.title)}</h1>${meta.subtitle ? `<p class="subtitle">${esc(meta.subtitle)}</p>` : ''}<hr class="cover-rule">
+    h += `<section class="page cover">${theme.band ? `<div class="band">${logoHtml(meta, true)}</div>` : `<p class="org">${logoHtml(meta)}</p>`}
+      <h1 class="title" data-meta="title">${esc(meta.title)}</h1>${meta.subtitle ? `<p class="subtitle" data-meta="subtitle">${esc(meta.subtitle)}</p>` : ''}<hr class="cover-rule">
       <div class="meta">${tableHtml([['항목', '내용'], ...metaRows(meta).map(([k, v]) => [k, v || ''])])}</div></section>`;
   }
   if (opt.front) {
@@ -113,11 +120,12 @@ function toHtml(doc, theme, meta, opt) {
   }
   h += '<section class="body">';
   for (const b of blocks) {
-    if (b.t === 'h') { if (b.text && !b.repeat) h += `<h${b.level + 1} class="h${b.level}">${b.num ? `<span class="num">${esc(b.num)}</span>` : ''}${esc(b.text)}</h${b.level + 1}>`; }
-    else if (b.t === 'p') h += `<p>${runsHtml(b.runs)}</p>`;
-    else if (b.t === 'li') h += `<p class="li k-${b.kind}" style="--lv:${b.level}" data-mark="${mark(b)}">${runsHtml(b.runs)}</p>`;
-    else if (b.t === 'note') { const n = noteParts(b.runs); h += `<p class="note"><b class="note-label">${esc(n.label)}</b>${runsHtml(n.runs)}</p>`; }
-    else if (b.t === 'table') h += tableHtml(b.rows);
+    const id = ` data-bid="${b.id}"`;
+    if (b.t === 'h') { if (b.text && !b.repeat) h += `<h${b.level + 1} class="h${b.level}"${id}>${b.num ? `<span class="num" contenteditable="false">${esc(b.num)}</span>` : ''}${esc(b.text)}</h${b.level + 1}>`; }
+    else if (b.t === 'p') h += `<p${id}>${runsHtml(b.runs)}</p>`;
+    else if (b.t === 'li') h += `<p class="li k-${b.kind}" style="--lv:${b.level}" data-mark="${mark(b)}"${id}>${runsHtml(b.runs)}</p>`;
+    else if (b.t === 'note') { const n = noteParts(b.runs); h += `<p class="note"${id}><b class="note-label" contenteditable="false">${esc(n.label)}</b>${runsHtml(n.runs)}</p>`; }
+    else if (b.t === 'table') h += tableHtml(b.rows, b.id);
     else if (b.t === 'img') h += `<figure><img src="${b.src}" alt=""></figure>`;
   }
   return h + '</section></article>';
@@ -173,7 +181,9 @@ async function toDocx(doc, theme, meta, opt) {
 
   const children = [];
   if (opt.cover) {
-    const org = run(ORG, { bold: true, color: theme.band ? 'FFFFFF' : theme.label, size: 17, characterSpacing: 60 });
+    const L = theme.band ? meta.logoWhite : meta.logo;
+    const org = L ? new D.ImageRun({ type: 'png', data: dataBytes(L.src), transformation: { width: Math.round(40 * L.w / L.h), height: 40 } })
+      : run(ORG, { bold: true, color: theme.band ? 'FFFFFF' : theme.label, size: 17, characterSpacing: 60 });
     const align = theme.center ? D.AlignmentType.CENTER : D.AlignmentType.LEFT;
     if (theme.band) {
       children.push(new D.Paragraph({ spacing: { before: 400, after: 0 } }), new D.Table({
@@ -338,7 +348,14 @@ function slideLayout(doc, theme, meta, opt) {
   const T = (x, y, w, h, paras, o = {}) => ({ k: 'text', x, y, w, h, paras, size: BODY_PT, color: theme.ink, font: f.body, ...o });
   const line = (x, y, w, color, pt) => ({ k: 'line', x, y, w, color, pt });
   const rect = (x, y, w, h, o) => ({ k: 'rect', x, y, w, h, ...o });
-  const p = (text, o = {}) => ({ runs: [{ text, ...o }] });
+  const p = (text, o = {}, extra = {}) => ({ runs: [{ text, ...o }], ...extra });
+  // 표지 기관명 자리의 로고(없으면 null). h는 높이 인치
+  const logoAt = (x, y, h, { white, center } = {}) => {
+    const L = white ? meta.logoWhite : meta.logo;
+    if (!L) return null;
+    const w = h * L.w / L.h;
+    return { k: 'img', src: L.src, x: center ? (SW - w) / 2 : x, y, w, h };
+  };
   // 액자형은 사진마다 가는 테두리
   const photo = (img, x, y, w, h) => S === 'frame'
     ? (im => [rect(im.x - 0.1, im.y - 0.1, im.w + 0.2, im.h + 0.2, { stroke: theme.hair, pt: 0.75 }), im])(fit(img, x + 0.1, y + 0.1, w - 0.2, h - 0.2))
@@ -350,8 +367,8 @@ function slideLayout(doc, theme, meta, opt) {
   blocks.forEach((b, i) => {
     if (b.t === 'h') {
       const next = blocks.slice(i + 1).find(x => x.t === 'h');
-      if (b.level === 1 && b.text && !b.repeat && next?.level > 1) { units.push({ divider: true, text: b.text, num: b.num, label: b.label }); section = b.text; cur = null; }
-      else { cur = { title: b.text, num: b.num, repeat: b.repeat, label: b.label, section: b.level === 1 ? '' : section, blocks: [] }; if (b.level === 1) section = ''; units.push(cur); }
+      if (b.level === 1 && b.text && !b.repeat && next?.level > 1) { units.push({ divider: true, text: b.text, num: b.num, label: b.label, bid: b.id }); section = b.text; cur = null; }
+      else { cur = { title: b.text, num: b.num, repeat: b.repeat, label: b.label, bid: b.id, section: b.level === 1 ? '' : section, blocks: [] }; if (b.level === 1) section = ''; units.push(cur); }
     } else {
       if (!cur) { cur = { title: '', num: '', section, blocks: [] }; units.push(cur); }
       cur.blocks.push(b);
@@ -413,9 +430,9 @@ function slideLayout(doc, theme, meta, opt) {
   // 한 단위를 본문 장들로 나눈다. 반환: [[item...]...]
   const bodyPages = u => {
     const mark = listMarker();
-    const toPara = b => b.t === 'li' ? { runs: [{ text: '    '.repeat(b.level) + mark(b) + ' ', color: b.kind === 'bullet' ? theme.label : undefined }, ...b.runs] }
-      : b.t === 'note' ? (n => ({ runs: [{ text: n.label + '  ', b: true, color: theme.accent || theme.label }, ...n.runs] }))(noteParts(b.runs))
-      : { runs: b.runs };
+    const toPara = b => b.t === 'li' ? { bid: b.id, runs: [{ text: '    '.repeat(b.level) + mark(b) + ' ', color: b.kind === 'bullet' ? theme.label : undefined, pre: true }, ...b.runs] }
+      : b.t === 'note' ? (n => ({ bid: b.id, runs: [{ text: n.label + '  ', b: true, color: theme.accent || theme.label, pre: true }, ...n.runs] }))(noteParts(b.runs))
+      : { bid: b.id, runs: b.runs };
     // 원래 순서대로 글·사진·표 조각으로 나눈다
     const pieces = [];
     for (const b of u.blocks) {
@@ -464,10 +481,10 @@ function slideLayout(doc, theme, meta, opt) {
         for (;;) {
           if (!page || (used && room() < heights[0] + (heights[1] || 0))) newPage();
           let h = heights[0];
-          const rows = [tb.rows[0]], hs = [heights[0]];
-          while (i < tb.rows.length && h + heights[i] <= room() + 0.01) { h += heights[i]; rows.push(tb.rows[i]); hs.push(heights[i]); i++; }
-          if (rows.length === 1 && i < tb.rows.length) { rows.push(tb.rows[i]); hs.push(heights[i]); h += heights[i]; i++; } // 한 줄이 한 장보다 커도 넣는다
-          place({ k: 'table', x: mx, w: cw, colW, rows, heights: hs }, h);
+          const rows = [tb.rows[0]], hs = [heights[0]], ris = [0];
+          while (i < tb.rows.length && h + heights[i] <= room() + 0.01) { h += heights[i]; rows.push(tb.rows[i]); hs.push(heights[i]); ris.push(i); i++; }
+          if (rows.length === 1 && i < tb.rows.length) { rows.push(tb.rows[i]); hs.push(heights[i]); ris.push(i); h += heights[i]; i++; } // 한 줄이 한 장보다 커도 넣는다
+          place({ k: 'table', x: mx, w: cw, colW, rows, heights: hs, bid: tb.id, ris }, h);
           if (i >= tb.rows.length) break;
           newPage();
         }
@@ -484,11 +501,11 @@ function slideLayout(doc, theme, meta, opt) {
     const ed = S === 'editorial';
     const pad = v => String(v).padStart(2, '0');
 
-    const header = (label, counter) => {
+    const header = (label, counter, bid) => {
       const labelColor = S === 'accent' ? accent : theme.label;
       const items = [];
       if (S === 'frame') items.push(rect(0, 0.34, SW, 0.66, { fill: theme.theadFill }));
-      items.push(T(mx, 0.52, 8, 0.3, [p(label, { b: true })], { size: 11, color: labelColor }));
+      items.push(T(mx, 0.52, 8, 0.3, [p(label, { b: true }, { bid })], { size: 11, color: labelColor }));
       if (counter && ed) items.push(T(SW - mx - 4, 0.3, 4, 0.52, [{ runs: [{ text: counter.big, size: 22, font: f.head, color: theme.ink }, { text: '  ' + counter.small, color: theme.label }] }], { size: 11, align: 'right', valign: 'bottom' }));
       else if (counter) items.push(T(SW - mx - 4, 0.52, 4, 0.3, [p(counter.text)], { size: 11, color: labelColor, align: 'right' }));
       if (S !== 'frame') items.push(line(mx, 0.92, cw, ed ? theme.hair : accent, S === 'accent' ? 2 : ed ? 0.75 : 1.5));
@@ -501,10 +518,10 @@ function slideLayout(doc, theme, meta, opt) {
     const cover = () => {
       const center = S === 'frame', al = center ? 'center' : 'left';
       const it = [];
-      if (S === 'accent') it.push(rect(0, 0.9, SW * 0.62, 0.9, { fill: accent }), T(mx, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
-      else it.push(T(mx, 2.25, cw, 0.35, [p(ORG, { b: true })], { size: 13, color: theme.label, align: al }));
-      it.push(T(mx, 2.7, cw, 1.1, [p(meta.title, { b: true })], { size: ed ? 44 : 40, font: f.head, align: al }));
-      if (meta.subtitle) it.push(T(mx, 3.95, cw, 0.4, [p(meta.subtitle)], { size: 15, color: theme.sub, align: al }));
+      if (S === 'accent') it.push(rect(0, 0.9, SW * 0.62, 0.9, { fill: accent }), logoAt(mx, 1.12, 0.46, { white: true }) || T(mx, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
+      else it.push(logoAt(mx, 2.08, 0.46, { center }) || T(mx, 2.25, cw, 0.35, [p(ORG, { b: true })], { size: 13, color: theme.label, align: al }));
+      it.push(T(mx, 2.7, cw, 1.1, [p(meta.title, { b: true }, { meta: 'title' })], { size: ed ? 44 : 40, font: f.head, align: al }));
+      if (meta.subtitle) it.push(T(mx, 3.95, cw, 0.4, [p(meta.subtitle, {}, { meta: 'subtitle' })], { size: 15, color: theme.sub, align: al }));
       const rx = center ? SW / 2 - 3.9 : mx, rw = center ? 7.8 : 10.5;
       it.push(center ? line(rx, 4.55, rw, theme.ink, 1) : line(mx, 4.55, ed ? 3 : cw, ed ? theme.ink : accent, ed ? 0.75 : 1.5));
       const rows = metaRows(meta).filter(([, v]) => v);
@@ -523,19 +540,19 @@ function slideLayout(doc, theme, meta, opt) {
         const pw = 4.9, tw = pw - mx - 0.4;
         return [rect(0, 0, pw, SH, { fill: accent }),
           T(mx, 2.2, tw, 0.9, [p(num, { b: true })], { size: 44, color: 'FFFFFF' }),
-          T(mx, 3.15, tw, 1.3, [p(u.text, { b: true })], { size: 30, color: 'FFFFFF', font: f.head }),
+          T(mx, 3.15, tw, 1.3, [p(u.text, { b: true }, { bid: u.bid })], { size: 30, color: 'FFFFFF', font: f.head }),
           ...(note ? [T(mx, 4.55, tw, 0.4, [p(note)], { size: 12, color: 'FFFFFF' })] : []),
           ...(u.img ? [fit(u.img, pw + 0.7, 1.2, SW - pw - 0.7 - mx, 5.2)] : [])];
       }
       if (S === 'frame') {
         return [T(mx, 1.5, cw, 0.75, [p(num, { b: true })], { size: 36, color: theme.label, align: 'center' }),
-          T(mx, 2.25, cw, 0.75, [p(u.text, { b: true })], { size: 30, align: 'center', font: f.head }),
+          T(mx, 2.25, cw, 0.75, [p(u.text, { b: true }, { bid: u.bid })], { size: 30, align: 'center', font: f.head }),
           ...(note ? [T(mx, 3.0, cw, 0.4, [p(note)], { size: 12, color: theme.sub, align: 'center' })] : []),
           ...(u.img ? photo(u.img, SW / 2 - 2.3, 3.6, 4.6, 3.1) : [line(SW / 2 - 1.2, 3.6, 2.4, theme.ink, 1)])];
       }
       const tx = mx + 1.5, tw = (u.img ? 8.2 : SW - mx) - tx;
       return [T(mx, ed ? 2.35 : 2.7, 1.4, ed ? 1.3 : 1.0, [p(num, { b: !ed })], { size: ed ? 60 : 44, color: theme.label, font: ed ? f.head : f.body }),
-        T(tx, 2.85, tw, 0.8, [p(u.text, { b: true })], { size: ed ? 32 : 30, font: f.head }),
+        T(tx, 2.85, tw, 0.8, [p(u.text, { b: true }, { bid: u.bid })], { size: ed ? 32 : 30, font: f.head }),
         ...(note ? [T(tx, 3.85, tw, 0.4, [p(note)], { size: 12, color: theme.sub })] : []),
         ...(u.img ? [fit(u.img, 8.41, 1.6, SW - mx - 8.41, 4.6)] : [])];
     };
@@ -590,11 +607,11 @@ function slideLayout(doc, theme, meta, opt) {
       const { slides, title } = s.chain;
       if (slides.length > 1) {
         const k = slides.indexOf(s) + 1, n = slides.length;
-        s.items.unshift(...header(title, { text: `STEP ${pad(k)} / ${pad(n)}`, big: pad(k), small: `/ ${pad(n)}` }));
+        s.items.unshift(...header(title, { text: `STEP ${pad(k)} / ${pad(n)}`, big: pad(k), small: `/ ${pad(n)}` }, slides[0].unit.bid));
       } else {
         const k = singles.indexOf(s) + 1, n = singles.length;
         s.items.unshift(...header(s.unit.label || s.unit.section || meta.title, { text: `${pad(k)} / ${pad(n)}`, big: pad(k), small: `/ ${pad(n)}` }),
-          ...(s.title ? [T(mx, ed ? 1.02 : 1.12, cw, 0.5, [p(s.title, { b: true })], { size: ed ? 20 : 15, font: f.head })] : []));
+          ...(s.title ? [T(mx, ed ? 1.02 : 1.12, cw, 0.5, [p(s.title, { b: true }, { bid: s.unit.bid })], { size: ed ? 20 : 15, font: f.head })] : []));
       }
     }
     let no = 0;
@@ -621,10 +638,10 @@ function slideLayout(doc, theme, meta, opt) {
   if (opt.cover) {
     const al = theme.center ? 'center' : 'left';
     const s = [];
-    if (theme.band) s.push({ k: 'rect', x: 0, y: 0.9, w: SW * 0.62, h: 0.9, fill: theme.accent }, T(MX, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
-    else s.push(T(MX, 2.05, CW, 0.35, [p(ORG, { b: true })], { size: 13, color: theme.label, align: al }));
-    s.push(T(MX, 2.5, CW, 1.2, [p(meta.title, { b: true })], { size: Math.min(40, theme.titlePt + 12), font: f.head, align: al, valign: 'bottom' }));
-    if (meta.subtitle) s.push(T(MX, 3.8, CW, 0.45, [p(meta.subtitle)], { size: 15, color: theme.sub, align: al }));
+    if (theme.band) s.push({ k: 'rect', x: 0, y: 0.9, w: SW * 0.62, h: 0.9, fill: theme.accent }, logoAt(MX, 1.12, 0.46, { white: true }) || T(MX, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
+    else s.push(logoAt(MX, 1.9, 0.46, { center: theme.center }) || T(MX, 2.05, CW, 0.35, [p(ORG, { b: true })], { size: 13, color: theme.label, align: al }));
+    s.push(T(MX, 2.5, CW, 1.2, [p(meta.title, { b: true }, { meta: 'title' })], { size: Math.min(40, theme.titlePt + 12), font: f.head, align: al, valign: 'bottom' }));
+    if (meta.subtitle) s.push(T(MX, 3.8, CW, 0.45, [p(meta.subtitle, {}, { meta: 'subtitle' })], { size: 15, color: theme.sub, align: al }));
     s.push(line(MX, 4.45, CW, theme.accent || theme.ink, 1.5));
     const rows = metaRows(meta).filter(([, v]) => v);
     rows.forEach(([k, v], i) => {
@@ -639,7 +656,7 @@ function slideLayout(doc, theme, meta, opt) {
   const tocRows = [];
   // 글만 있는 짧은 소제목들은 같은 장 안에서 한 슬라이드에 이어 담는다
   const SUB_H = 0.4, GAP = 0.3;
-  const sub = (u, y) => T(MX, y, CW, SUB_H, [{ runs: [...(u.num ? [{ text: u.num + ' ', color: theme.accent || theme.label }] : []), { text: u.title }] }], { size: 14, bold: true, font: f.head });
+  const sub = (u, y) => T(MX, y, CW, SUB_H, [{ bid: u.bid, runs: [...(u.num ? [{ text: u.num + ' ', color: theme.accent || theme.label, pre: true }] : []), { text: u.title }] }], { size: 14, bold: true, font: f.head });
   let pack = null, dividerNo = 0;
   for (const u of units) {
     if (u.divider) {
@@ -663,7 +680,7 @@ function slideLayout(doc, theme, meta, opt) {
         const first = s.items[0];
         s.items = [sub(s, BODY_TOP), ...(first ? [{ ...first, y: BODY_TOP + SUB_H }] : [])];
         pack.used = SUB_H + (first ? first.h : 0);
-        s.title = u.section; s.num = ''; s.section = '';
+        s.title = u.section; s.num = ''; s.section = ''; s.bid = undefined;
         pack.merged = true;
       }
       const y = BODY_TOP + pack.used + (pack.used ? GAP : 0);
@@ -676,7 +693,7 @@ function slideLayout(doc, theme, meta, opt) {
     else if (tocRows.length) tocRows[tocRows.length - 1].count += pages.length;
     pack = null;
     for (const items of pages) {
-      const s = { items: [], content: true, section: u.section, title: u.title, num: u.num };
+      const s = { items: [], content: true, section: u.section, title: u.title, num: u.num, bid: u.bid };
       s.items.push(...items);
       slides.push(s); content.push(s);
     }
@@ -689,7 +706,7 @@ function slideLayout(doc, theme, meta, opt) {
       T(MX, 0.5, 8, 0.3, [p(s.section || meta.title, { b: true })], { size: 11, color: theme.label }),
       T(SW - MX - 3, 0.5, 3, 0.3, [p(`${String(i + 1).padStart(2, '0')} / ${String(content.length).padStart(2, '0')}`)], { size: 11, color: theme.label, align: 'right' }),
       line(MX, 0.92, CW, theme.rule || theme.ink, theme.accent ? 2 : 1.5),
-      ...(s.title ? [T(MX, 1.1, CW, 0.45, [{ runs: [...(s.num ? [{ text: s.num + (theme.number === 'big' ? '   ' : ' '), color: theme.number === 'big' ? theme.label : theme.accent || theme.ink }] : []), { text: s.title }] }], { size: 16, bold: true, font: f.head })] : []),
+      ...(s.title ? [T(MX, 1.1, CW, 0.45, [{ bid: s.bid, runs: [...(s.num ? [{ text: s.num + (theme.number === 'big' ? '   ' : ' '), color: theme.number === 'big' ? theme.label : theme.accent || theme.ink, pre: true }] : []), { text: s.title }] }], { size: 16, bold: true, font: f.head })] : []),
     );
   });
   if (tocAt >= 0) {
@@ -741,10 +758,13 @@ function slideHtml(s, theme, opt) {
     if (it.k === 'table') {
       return `<table class="stbl${theme.grid ? ' grid' : ''}" style="${box}--thead-line:#${theme.theadLine};--hair:#${theme.hair};--thead-fill:${theme.theadFill ? '#' + theme.theadFill : 'transparent'};color:#${theme.ink}">
         <colgroup>${it.colW.map(w => `<col style="width:${px(w)}">`).join('')}</colgroup>
-        ${it.rows.map((r, ri) => `<tr style="height:${px(it.heights[ri])}">${r.map(c => ri === 0 ? `<th style="color:#${theme.label}">${esc(c).replace(/\n/g, '<br>')}</th>` : `<td>${esc(c).replace(/\n/g, '<br>')}</td>`).join('')}</tr>`).join('')}</table>`;
+        ${it.rows.map((r, ri) => `<tr style="height:${px(it.heights[ri])}">${r.map((c, ci) => {
+          const cell = it.bid !== undefined ? ` data-cell="${it.bid}:${it.ris[ri]}:${ci}"` : '';
+          return ri === 0 ? `<th style="color:#${theme.label}"${cell}>${esc(c).replace(/\n/g, '<br>')}</th>` : `<td${cell}>${esc(c).replace(/\n/g, '<br>')}</td>`;
+        }).join('')}</tr>`).join('')}</table>`;
     }
     const valign = { middle: 'center', bottom: 'flex-end' }[it.valign] || 'flex-start';
-    return `<div class="tx" style="${box}height:${px(it.h)};justify-content:${valign};text-align:${it.align || 'left'};font-size:${it.size}pt;color:#${it.color};${it.bold ? 'font-weight:700;' : ''}font-family:'${it.font}',Pretendard,sans-serif">${it.paras.map(q => `<p>${runsHtml(q.runs)}</p>`).join('')}</div>`;
+    return `<div class="tx" style="${box}height:${px(it.h)};justify-content:${valign};text-align:${it.align || 'left'};font-size:${it.size}pt;color:#${it.color};${it.bold ? 'font-weight:700;' : ''}font-family:'${it.font}',Pretendard,sans-serif">${it.paras.map(q => `<p${q.bid !== undefined ? ` data-bid="${q.bid}"` : q.meta ? ` data-meta="${q.meta}"` : ''}>${runsHtml(q.runs)}</p>`).join('')}</div>`;
   }).join('')}</div>`;
 }
 
