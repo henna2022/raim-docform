@@ -9,7 +9,7 @@ const MAX_IMG = 1600; // 긴 변 픽셀. 원본 그대로 넣으면 수백 MB가
 async function readDocument(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   const buf = await file.arrayBuffer();
-  const doc = { title: '', subtitle: '', blocks: [], warnings: [] };
+  const doc = { title: '', subtitle: '', blocks: [], warnings: [], source: ext };
   if (ext === 'docx') await readDocx(buf, doc);
   else if (ext === 'pptx') await readPptx(buf, doc);
   else if (ext === 'hwpx') await readHwpx(buf, doc);
@@ -100,13 +100,23 @@ function inferHeadings(doc) {
 // 이 양식으로 만든 문서를 다시 올리면 표지·개정 이력이 본문에 섞인다.
 // 첫 제목 앞에 문서번호·버전 표가 있으면 표지로 보고, 값은 표지 정보로 옮긴다
 const META_KEYS = { 문서번호: 'docNo', 버전: 'version', 작성부서: 'dept', 작성자: 'author', 승인자: 'approver' };
+// "2026년 9월 8일" → date 입력칸 값
+function setDate(meta, text) {
+  const m = text.match(/(\d{4})\s*[년.-]\s*(\d{1,2})\s*[월.-]\s*(\d{1,2})/);
+  if (m) meta.date = `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+}
 function absorbCover(doc) {
   const first = doc.blocks.findIndex(b => b.t === 'h');
   const head = doc.blocks.slice(0, first < 0 ? 0 : first);
   const table = head.find(b => b.t === 'table' && b.rows.filter(r => /^(문서번호|버전|작성일)$/.test(r[0].trim())).length >= 2);
   if (!table) return;
-  doc.meta = {};
-  for (const [k, v] of table.rows) if (META_KEYS[k.trim()] && v?.trim()) doc.meta[META_KEYS[k.trim()]] = v.trim();
+  doc.meta = { extra: [] };
+  for (const [k, v] of table.rows) {
+    if (!v?.trim() || k.trim() === '항목') continue;
+    if (k.trim() === '작성일') setDate(doc.meta, v);
+    else if (META_KEYS[k.trim()]) doc.meta[META_KEYS[k.trim()]] = v.trim();
+    else doc.meta.extra.push([k.trim(), v.trim()]);
+  }
   const texts = head.filter(b => b.t === 'p').map(b => runsText(b.runs).trim()).filter(t => !/^(서울로봇인공지능과학관|개정\s*이력|목\s*차|차\s*례)$/.test(t) && !/필드 업데이트/.test(t));
   if (!doc.title && texts[0]) doc.title = texts[0];
   if (!doc.subtitle && texts[1] && texts[1].length <= 80) doc.subtitle = texts[1];
@@ -281,7 +291,7 @@ async function readPptx(buf, doc) {
           if (ph === 'title' || ph === 'ctrTitle') { title = title || text; continue; }
           if (ph === 'subTitle') { subtitle = subtitle || text; continue; }
           // 머리말·꼬리말처럼 위아래 가장자리에 붙은 짧은 글상자는 버린다
-          if (text.length < 40 && (y + h < slideH * 0.13 || y > slideH * 0.9)) {
+          if (si > 0 && text.length < 40 && (y + h < slideH * 0.13 || y > slideH * 0.9)) { // 첫 장(표지)은 맨 아랫줄까지 내용
             if (y < slideH * 0.13 && x < slideW * 0.5 && !/^(\d+|\d+\s*\/\s*\d+|step\b.*|p\.?\s*\d+)$/i.test(text)) edges.push(text);
             continue;
           }
@@ -305,7 +315,11 @@ async function readPptx(buf, doc) {
     walk(desc(root, 'spTree')[0]);
     items.sort((a, b) => Math.abs(a.y - b.y) < slideH * 0.03 ? a.x - b.x : a.y - b.y);
 
-    if (/^(차\s*례|목\s*차|contents)$/i.test(title || edges[0] || '')) continue; // 원본 차례 슬라이드
+    // 원본 차례 슬라이드는 버리되, 큰 묶음 이름("PART 1  ON  ·  전시물 켜기")은 새 차례에 쓰려고 챙긴다
+    if (/^(차\s*례|목\s*차|contents)$/i.test(title || edges[0] || '')) {
+      doc.parts = items.filter(i => i.kind === 'text' && i.paras.length === 1 && i.size >= 1400 && i.bold).map(i => i.text);
+      continue;
+    }
     const short = i => i.kind === 'text' && i.paras.length === 1 && i.text.length <= 60 && !/^\d{1,2}$/.test(i.text);
     // 첫 장에 그림·표가 없으면 표지. 가장 큰 글씨가 제목, 그 바로 아래 줄이 부제
     if (si === 0 && !items.some(i => i.kind !== 'text') && (title || items.length)) {
@@ -313,9 +327,15 @@ async function readPptx(buf, doc) {
       doc.title = title || big?.text || items[0].text;
       const below = big ? items.filter(i => i.y > big.y && i.text.length <= 80)[0] : null;
       doc.subtitle = subtitle || below?.text || '';
-      // 표지의 "문서번호  RAIM-…" 같은 같은 줄 짝은 표지 정보로
-      doc.meta = {};
-      items.forEach((it, k) => { const key = META_KEYS[it.text]; const v = items[k + 1]; if (key && v && Math.abs(v.y - it.y) < slideH * 0.02) doc.meta[key] = v.text; });
+      // 표지의 "문서번호  RAIM-…" 같은 같은 줄 짝은 표지 정보로. 모르는 항목(대상 전시물 등)은 extra로 그대로 옮긴다
+      doc.meta = { extra: [] };
+      items.forEach((it, k) => {
+        const v = items[k + 1];
+        if (!v || it === big || v === big || it.text.length > 10 || v.x <= it.x || Math.abs(v.y - it.y) >= slideH * 0.02) return;
+        if (META_KEYS[it.text]) doc.meta[META_KEYS[it.text]] = v.text;
+        else if (it.text === '작성일') setDate(doc.meta, v.text);
+        else doc.meta.extra.push([it.text, v.text]);
+      });
       continue;
     }
     // 제목 틀이 없으면 큰 글씨(20pt 이상) → 위쪽 굵은 한 줄 → 머리말 순으로 제목을 찾는다
@@ -325,13 +345,15 @@ async function readPptx(buf, doc) {
       if (cand) { title = cand.text; items.splice(items.indexOf(cand), 1); }
     }
     if (!title && edges.length) title = edges[0];
-    // 구분 슬라이드의 장식용 큰 번호("01")는 버린다
-    for (let k = items.length - 1; k >= 0; k--) if (items[k].kind === 'text' && /^\d{1,2}$/.test(items[k].text) && items[k].size >= 2000) items.splice(k, 1);
+    // 구분 슬라이드의 장식용 큰 번호("01")는 버리고, 그런 장은 큰 구분(1수준)으로 본다
+    let decorated = false;
+    for (let k = items.length - 1; k >= 0; k--) if (items[k].kind === 'text' && /^\d{1,2}$/.test(items[k].text) && items[k].size >= 2000) { items.splice(k, 1); decorated = true; }
+    const label = edges.find(e => e !== title); // 머리말("ON", "미디어 파사드")
     if (!title && !items.length) continue;
     // 제목만 있는 장은 큰 구분(장), 나머지는 한 장이 소제목 하나.
     // 앞 장과 제목이 같으면(단계별 슬라이드) repeat 표시: 슬라이드는 나누되 문서에는 제목을 한 번만 쓴다
     const prev = doc.blocks.findLast(b => b.t === 'h');
-    doc.blocks.push({ t: 'h', level: items.length ? 2 : 1, text: title, ...(title && prev?.text === title ? { repeat: true } : {}) });
+    doc.blocks.push({ t: 'h', level: items.length && !decorated ? 2 : 1, text: title, ...(label ? { label } : {}), ...(title && prev?.text === title ? { repeat: true } : {}) });
     let list = 0;
     for (const it of items) {
       if (it.kind === 'text') {

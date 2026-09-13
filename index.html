@@ -42,8 +42,10 @@
   .theme img { display: block; width: 100%; aspect-ratio: 440 / 309; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; }
   .theme b { display: block; margin-top: 6px; font-size: 13px; }
   .theme small { display: block; font-size: 11.5px; line-height: 1.4; color: var(--sub); }
-  .theme input:checked ~ img { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
-  .theme input:focus-visible ~ img { outline: 2px solid #1D4ED8; outline-offset: 2px; }
+  .theme .mini { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .theme .mini .slide { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .theme input:checked ~ img, .theme input:checked ~ .mini { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .theme input:focus-visible ~ img, .theme input:focus-visible ~ .mini { outline: 2px solid #1D4ED8; outline-offset: 2px; }
 
   .field { display: block; margin-bottom: 10px; }
   .field span { display: block; margin-bottom: 3px; font-size: 12px; color: var(--sub); }
@@ -56,11 +58,11 @@
   .checks { display: flex; gap: 16px; margin-top: 4px; font-size: 13px; }
   .checks label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
-  .seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .seg label { position: relative; cursor: pointer; } /* 숨긴 radio가 페이지 높이를 늘려 화면이 밀리지 않게 */
   .seg input { position: absolute; opacity: 0; }
   .seg span { display: block; padding: 9px 0; text-align: center; font-size: 13px; }
-  .seg label + label span { border-left: 1px solid var(--line); }
+  .seg label:not([hidden]) ~ label span { border-left: 1px solid var(--line); }
   .seg input:checked + span { background: var(--ink); color: #fff; font-weight: 700; }
   .seg input:focus-visible + span { outline: 2px solid #1D4ED8; outline-offset: -2px; }
   .go { width: 100%; height: 46px; margin-top: 14px; border: 0; border-radius: 8px; background: var(--ink); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
@@ -106,6 +108,7 @@
 
     <section class="step">
       <h2><span>2</span>양식 고르기</h2>
+      <p class="hint" id="themeHint" hidden style="margin:-4px 0 12px">PowerPoint 파일이라 사진 매뉴얼용 슬라이드 양식을 보여드려요.</p>
       <div class="themes" id="themes"></div>
     </section>
 
@@ -132,7 +135,7 @@
       </details>
       <div class="checks">
         <label><input type="checkbox" id="cover" checked> 표지</label>
-        <label><input type="checkbox" id="front" checked> 개정 이력 · 목차</label>
+        <label><input type="checkbox" id="front" checked> <span id="frontLabel">개정 이력 · 목차</span></label>
       </div>
     </section>
 
@@ -184,31 +187,64 @@ const SAMPLE = { title: '전시물 운영 매뉴얼', subtitle: '견본 문서�
   { t: 'p', runs: [{ text: '관련 링크는 이렇게 표시합니다. 예: ' }, { text: 'raim-guide.vercel.app', href: 'https://raim-guide.vercel.app' }] },
 ] };
 
+// 슬라이드 양식 카드에 그릴 견본. 사진 자리는 회색 그림
+const PHOTO = (w, h) => ({ t: 'img', w, h, src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="#E5E7EB"/><path d="M0 ${h * .78}L${w * .35} ${h * .45}L${w * .6} ${h * .7}L${w * .75} ${h * .56}L${w} ${h * .8}V${h}H0Z" fill="#D1D5DB"/><circle cx="${w * .72}" cy="${h * .3}" r="${h * .09}" fill="#D1D5DB"/></svg>`) });
+const DECK_SAMPLE = { title: '3층 상설전시 ON / OFF 매뉴얼', source: 'pptx', warnings: [], blocks: [
+  { t: 'h', level: 1, text: '앨리스', label: 'ON' }, PHOTO(400, 300),
+  { t: 'h', level: 2, text: 'ON · 앨리스' }, PHOTO(400, 300), PHOTO(300, 400), { t: 'p', runs: r('TV 오른쪽 뒤 전원 버튼을 누릅니다.') }, { t: 'p', runs: r('Mass Storage USB 항목을 누릅니다.') },
+  { t: 'h', level: 2, text: 'ON · 앨리스', repeat: true }, PHOTO(300, 400), { t: 'p', runs: r('창고 안쪽 파워서플라이의 PC 전원 버튼을 누릅니다.') },
+] };
+
 let doc = SAMPLE;
 const store = {
   get(k) { try { return localStorage.getItem('docform.' + k); } catch { return null; } },
   set(k, v) { try { localStorage.setItem('docform.' + k, v); } catch {} },
 };
 
-// 양식 카드
-$('themes').innerHTML = Object.values(THEMES).map(t => `
-  <label class="theme"><input type="radio" name="theme" value="${t.key}"${t.key === (store.get('theme') || 'A') ? ' checked' : ''}>
-    <img src="img/theme-${t.key}.jpg" alt="${t.name} 양식 예시"><b>${t.name}</b><small>${t.desc}</small></label>`).join('');
+// PowerPoint를 올리면 사진 매뉴얼용 슬라이드 양식(P1~P4), 그 밖에는 문서 양식(A~D)
+const isDeck = () => doc.source === 'pptx';
+const ALL_THEMES = { ...THEMES, ...SLIDE_THEMES };
+function renderThemes() {
+  const deck = isDeck();
+  const list = Object.values(deck ? SLIDE_THEMES : THEMES);
+  const saved = store.get(deck ? 'slideTheme' : 'theme');
+  const pick = list.some(t => t.key === saved) ? saved : list[0].key;
+  $('themes').innerHTML = list.map(t => `
+    <label class="theme"><input type="radio" name="theme" value="${t.key}"${t.key === pick ? ' checked' : ''}>
+      ${deck ? `<div class="mini">${slideHtml(slideLayout(DECK_SAMPLE, t, { title: DECK_SAMPLE.title }, { cover: false, front: false })[1], t, { font: 'pretendard' })}</div>`
+        : `<img src="img/theme-${t.key}.jpg" alt="${t.name} 양식 예시">`}<b>${t.name}</b><small>${t.desc}</small></label>`).join('');
+  fitMinis();
+  $('themeHint').hidden = !deck;
+  $('frontLabel').textContent = deck ? '차례' : '개정 이력 · 목차';
+  // 슬라이드 양식에는 Word가 없다
+  const word = document.querySelector('[name=format][value=docx]');
+  word.closest('label').hidden = deck;
+  if (deck && word.checked) document.querySelector('[name=format][value=pptx]').checked = true;
+  if (!deck && !document.querySelector('[name=format]:checked')) word.checked = true;
+}
+function fitMinis() {
+  for (const m of document.querySelectorAll('.mini')) m.firstElementChild.style.transform = `scale(${m.clientWidth / 1280})`;
+}
+addEventListener('resize', fitMinis);
 
 const today = new Date();
-$('date').value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+$('date').value = todayIso;
 $('title').value = SAMPLE.title;
 $('subtitle').value = SAMPLE.subtitle;
 for (const el of document.querySelectorAll('[data-keep]')) { const v = store.get(el.id); if (v) el.value = v; }
 const savedFormat = store.get('format');
 if (savedFormat) document.querySelector(`[name=format][value=${savedFormat}]`).checked = true;
+renderThemes();
 
 function state() {
   const [y, m, d] = $('date').value.split('-');
   const meta = { title: $('title').value.trim() || doc.title, subtitle: $('subtitle').value.trim(), docNo: $('docNo').value.trim(), version: $('version').value.trim(),
-    date: $('date').value, dateText: y ? `${+y}년 ${+m}월 ${+d}일` : '', dept: $('dept').value.trim(), author: $('author').value.trim(), approver: $('approver').value.trim() };
+    date: $('date').value, dateText: y ? `${+y}년 ${+m}월 ${+d}일` : '', dept: $('dept').value.trim(), author: $('author').value.trim(), approver: $('approver').value.trim(),
+    extra: doc.meta?.extra || [] };
   const opt = { cover: $('cover').checked, front: $('front').checked, font: $('font').value };
-  const theme = THEMES[document.querySelector('[name=theme]:checked').value];
+  const theme = ALL_THEMES[document.querySelector('[name=theme]:checked').value];
   const format = document.querySelector('[name=format]:checked').value;
   return { meta, opt, theme, format };
 }
@@ -217,6 +253,7 @@ const HINTS = {
   docx: 'Word로 열 때 "필드를 업데이트할까요?"가 뜨면 "예"를 누르세요. 목차가 채워져요.',
   pptx: '16:9 슬라이드로 만들어요. 사진 한 장은 왼쪽 사진, 오른쪽 설명으로 놓여요.',
   pdf: '인쇄 창이 뜨면 대상에서 "PDF로 저장"을 고르세요.',
+  deck: '같은 제목이 이어지는 슬라이드는 단계로 묶어 "STEP 01 / 12"를 달아요.',
 };
 
 let timer;
@@ -224,9 +261,9 @@ function render() {
   clearTimeout(timer);
   timer = setTimeout(() => {
     const { meta, opt, theme, format } = state();
-    $('formatHint').textContent = HINTS[format];
+    $('formatHint').textContent = theme.deck && format === 'pptx' ? HINTS.deck : HINTS[format];
     const zoom = $('zoom');
-    if (format === 'pptx') {
+    if (format === 'pptx' || theme.deck) {
       zoom.innerHTML = slidesHtml(doc, theme, meta, opt);
       $('barInfo').textContent = `슬라이드 ${zoom.children.length}장 · ${theme.name}`;
     } else {
@@ -255,19 +292,19 @@ async function load(file) {
     doc = await readDocument(file);
     $('title').value = doc.title;
     $('subtitle').value = doc.subtitle || '';
-    $('docNo').value = ''; $('approver').value = ''; $('version').value = 'v1.0';
-    for (const [k, v] of Object.entries(doc.meta || {})) $(k).value = v;
+    $('docNo').value = ''; $('approver').value = ''; $('version').value = 'v1.0'; $('date').value = todayIso;
+    for (const [k, v] of Object.entries(doc.meta || {})) if (k !== 'extra') $(k).value = v;
     const count = t => doc.blocks.filter(b => b.t === t).length;
     $('fileinfo').textContent = `${file.name} · 제목 ${count('h')} · 표 ${count('table')} · 그림 ${count('img')}`;
     $('warns').innerHTML = doc.warnings.map(w => `<li>${esc(w)}</li>`).join('');
-    render();
   } catch (e) {
     console.error(e);
     doc = SAMPLE;
     $('fileinfo').className = 'file error';
     $('fileinfo').textContent = e.message.match(/[가-힣]/) ? e.message : `읽지 못했어요. 파일이 손상됐거나 지원하지 않는 형식이에요. (${e.message})`;
-    render();
   }
+  renderThemes();
+  render();
 }
 
 $('file').addEventListener('change', e => e.target.files[0] && load(e.target.files[0]));
@@ -277,7 +314,8 @@ drop.addEventListener('dragleave', () => drop.classList.remove('over'));
 drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) load(e.dataTransfer.files[0]); });
 
 document.querySelector('.panel').addEventListener('input', e => {
-  if (e.target.name === 'theme' || e.target.name === 'format') store.set(e.target.name, e.target.value);
+  if (e.target.name === 'theme') store.set(isDeck() ? 'slideTheme' : 'theme', e.target.value);
+  if (e.target.name === 'format') store.set('format', e.target.value);
   if (e.target.dataset.keep !== undefined) store.set(e.target.id, e.target.value);
   if (e.target.id !== 'file') render();
 });
@@ -292,6 +330,13 @@ function save(blob, name) {
 
 // 인쇄용 문서. 꼬리말(제목·쪽번호)은 @page 여백 칸에 넣는다
 function pdfHtml(theme, meta, opt) {
+  const fontsLink = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap">';
+  if (theme.deck) {
+    // 슬라이드 양식은 16:9 한 장이 PDF 한 쪽
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
+      <link rel="stylesheet" href="doc.css">${fontsLink}<style>@page{size:13.333in 7.5in;margin:0}body{margin:0}.slide{break-after:page}</style></head>
+      <body>${slidesHtml(doc, theme, meta, opt)}</body></html>`;
+  }
   const css = s => '"' + String(s).replace(/["\\]/g, '\\$&') + '"';
   const box = `font:7.5pt Pretendard,sans-serif;color:#${theme.label};vertical-align:top;padding-top:3mm;border-top:.5pt solid #${theme.hair}`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
