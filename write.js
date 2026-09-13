@@ -8,7 +8,7 @@ const THEMES = {
     theadLine: '9AA1AA', theadSz: 4, theadFill: 'F2F3F5', grid: true, center: true, rule: '1C1C1E', ruleSz: 8, number: 'decimal', titlePt: 20, h1Pt: 11 },
   C: { name: 'C 컬러 액센트', desc: 'A 구조에 남색 포인트', ink: '1C1C1E', sub: '6B7280', label: '9CA3AF', link: '14396B', hair: 'ECEEF1',
     theadLine: '14396B', theadSz: 8, accent: '14396B', band: true, rule: '14396B', ruleSz: 16, number: 'decimal', titlePt: 26, h1Pt: 11 },
-  D: { name: 'D 에디토리얼', desc: '명조 제목, 01 / 02 큰 번호, 넓은 여백', ink: '20242A', sub: '6B7280', label: 'B0B6BE', link: '1D4ED8', hair: 'EEF0F2',
+  D: { name: 'D 에디토리얼', desc: '명조 제목, 큰 번호, 넓은 여백', ink: '20242A', sub: '6B7280', label: 'B0B6BE', link: '1D4ED8', hair: 'EEF0F2',
     theadLine: '20242A', theadSz: 8, serif: true, rule: null, ruleSz: 0, number: 'big', titlePt: 32, h1Pt: 13, wide: true },
 };
 for (const k in THEMES) THEMES[k].key = k;
@@ -16,7 +16,7 @@ for (const k in THEMES) THEMES[k].key = k;
 // PPT(사진 위주 매뉴얼)를 올렸을 때 고르는 슬라이드 양식. P1은 기기매뉴얼 원본 배치, P2~P4는 문서 양식 B~D와 짝
 const SLIDE_THEMES = {
   P1: { ...THEMES.A, key: 'P1', deck: 'basic', name: '기본형', desc: '지금 기기매뉴얼 그대로' },
-  P2: { ...THEMES.B, key: 'P2', deck: 'frame', name: '액자형', desc: '사진마다 가는 테두리, 가운데 구분 장', label: '8A929C', number: 'none' },
+  P2: { ...THEMES.B, key: 'P2', deck: 'frame', name: '액자형', desc: '사진마다 테두리, 가운데 구분 장', label: '8A929C', number: 'none' },
   P3: { ...THEMES.C, key: 'P3', deck: 'accent', name: '컬러 포인트', desc: '남색 선과 남색 구분 장', number: 'none' },
   P4: { ...THEMES.D, key: 'P4', deck: 'editorial', name: '에디토리얼', desc: '명조 제목, 큰 단계 번호', number: 'none' },
 };

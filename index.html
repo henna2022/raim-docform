@@ -72,8 +72,10 @@
   .go:disabled { opacity: .5; cursor: progress; }
 
   .preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .bar { display: flex; justify-content: space-between; gap: 12px; padding: 14px 28px; font-size: 12px; color: var(--sub); border-bottom: 1px solid var(--line); background: var(--bg); }
-  .bar b { color: var(--ink); }
+  .bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; padding: 12px 28px; font-size: 12px; color: var(--sub); border-bottom: 1px solid var(--line); background: var(--bg); }
+  .bar b { overflow: hidden; color: var(--ink); white-space: nowrap; text-overflow: ellipsis; }
+  .bar #barInfo { white-space: nowrap; }
+  .bar .edit-hint { grid-column: 1 / -1; color: var(--label); }
   .stage { flex: 1; min-height: 0; overflow: auto; padding: 24px 28px 60px; }
   .zoom { margin: 0 auto; transform-origin: top left; }
   .zoom .doc { background: none; }
@@ -84,6 +86,7 @@
   /* 미리보기 사진 도구줄 */
   .zoom [data-img] { cursor: grab; }
   .zoom [data-img].drop-on { outline: 4px solid #1D4ED8; outline-offset: -4px; }
+  .imgbar[hidden] { display: none; }
   .imgbar { position: fixed; z-index: 10; display: flex; gap: 2px; padding: 4px; border-radius: 8px; background: rgba(28, 28, 30, .92); box-shadow: 0 2px 8px rgba(0,0,0,.2); }
   .imgbar button { padding: 6px 9px; border: 0; border-radius: 6px; background: none; color: #fff; font-size: 12px; cursor: pointer; white-space: nowrap; }
   .imgbar button:hover:not(:disabled) { background: rgba(255, 255, 255, .16); }
@@ -111,8 +114,8 @@
         <strong>파일을 끌어다 놓거나 눌러서 고르기</strong>
         <span>Word(docx) · PowerPoint(pptx) · 한글(hwpx, hwp)</span>
       </label>
-      <p class="hint">한글(hwp) 파일은 표 모양과 글자 서식이 깨질 수 있어요. 한글에서 hwpx로 저장해서 올리면 더 잘 옮겨져요.</p>
-      <p class="hint">파일은 이 컴퓨터의 브라우저 안에서만 바뀌고, 어디에도 올라가지 않아요.</p>
+      <p class="hint">한글(hwp) 파일은 표 모양과 글자 서식이 깨질 수 있어요.<br>한글에서 hwpx로 저장해서 올리면 더 잘 옮겨져요.</p>
+      <p class="hint">파일은 이 컴퓨터의 브라우저 안에서만 바뀌고,<br>어디에도 올라가지 않아요.</p>
       <p class="file" id="fileinfo">아직 올린 파일이 없어서 견본 문서로 보여드려요.</p>
       <ul class="warns" id="warns"></ul>
     </section>
@@ -128,7 +131,7 @@
           <option value="paperlogy">페이퍼로지</option>
         </select>
       </label>
-      <p class="hint">받는 파일을 여는 PC에 그 글꼴이 설치돼 있어야 그대로 보여요. 맑은 고딕은 윈도우에 기본으로 있어요.</p>
+      <p class="hint">받는 파일을 여는 PC에 그 글꼴이 설치돼 있어야 그대로 보여요.<br>맑은 고딕은 윈도우에 기본으로 있어요.</p>
     </section>
 
     <section class="step">
@@ -165,7 +168,7 @@
   </aside>
 
   <main class="preview">
-    <div class="bar"><span><b id="barTitle">미리보기</b></span><span id="barInfo"></span></div>
+    <div class="bar"><b id="barTitle">미리보기</b><span id="barInfo"></span><span class="edit-hint">글자는 눌러서 고치고, 사진은 마우스를 올려 바꾸거나 순서를 바꿔요.</span></div>
     <div class="stage" id="stage"><div class="zoom" id="zoom"></div></div>
     <div class="imgbar" id="imgbar" hidden>
       <button type="button" data-act="prev" title="앞 사진과 자리 바꾸기">← 앞으로</button>
@@ -286,8 +289,11 @@ function state() {
   return { meta, opt, theme, format };
 }
 
+// 안내 문구는 문장('.')마다 줄을 바꾼다
+const sentenceLines = text => esc(text).replace(/([.?!])\s+(?=\S)/g, '$1<br>');
+
 const HINTS = {
-  docx: 'Word로 열 때 "필드를 업데이트할까요?"가 뜨면 "예"를 누르세요. 목차가 채워져요.',
+  docx: 'Word로 열 때 "필드를 업데이트할까요?"가 뜨면 "예"를 누르세요. 목차가 채워져요. 쪽 나눔은 Word에서 조금 달라질 수 있어요.',
   pptx: '16:9 슬라이드로 만들어요. 사진 한 장은 왼쪽 사진, 오른쪽 설명으로 놓여요.',
   pdf: '인쇄 창이 뜨면 대상에서 "PDF로 저장"을 고르세요.',
   deck: '같은 제목이 이어지는 슬라이드는 단계로 묶어 "STEP 01 / 12"를 달아요.',
@@ -298,16 +304,15 @@ function render() {
   clearTimeout(timer);
   timer = setTimeout(() => {
     const { meta, opt, theme, format } = state();
-    $('formatHint').textContent = theme.deck && format === 'pptx' ? HINTS.deck : HINTS[format];
+    $('formatHint').innerHTML = sentenceLines(theme.deck && format === 'pptx' ? HINTS.deck : HINTS[format]);
     const zoom = $('zoom');
     if (format === 'pptx' || theme.deck) {
       zoom.innerHTML = slidesHtml(doc, theme, meta, opt);
-      $('barInfo').textContent = `슬라이드 ${zoom.children.length}장 · ${theme.name}`;
+      $('barInfo').textContent = `${theme.name} · 슬라이드 ${zoom.children.length}장`;
     } else {
       zoom.innerHTML = toHtml(doc, theme, meta, opt);
-      $('barInfo').textContent = `A4 세로 · ${theme.name} · 쪽 나눔은 Word에서 조금 달라질 수 있어요`;
+      $('barInfo').textContent = `${theme.name} · A4 세로`;
     }
-    $('barInfo').textContent += ' · 글자는 눌러서, 사진은 마우스를 올려서 고칠 수 있어요';
     $('barTitle').textContent = meta.title;
     for (const el of zoom.querySelectorAll('[data-bid], [data-cell], [data-meta]')) {
       el.dataset.edit = '';
@@ -404,7 +409,7 @@ async function replaceImage(id, file) {
   const b = doc.blocks[blockIndex(id)];
   if (!b || !file) return;
   const im = await normImage(file);
-  if (!im) { alert('이 사진 파일은 열 수 없어요. JPG나 PNG로 올려주세요.'); return; }
+  if (!im) { alert('이 사진 파일은 열 수 없어요.\nJPG나 PNG로 올려주세요.'); return; }
   Object.assign(b, { src: im.src, w: im.w, h: im.h });
   hideBar();
   render();
@@ -502,12 +507,12 @@ async function load(file) {
     for (const [k, v] of Object.entries(doc.meta || {})) if (k !== 'extra') $(k).value = v;
     const count = t => doc.blocks.filter(b => b.t === t).length;
     $('fileinfo').textContent = `${file.name} · 제목 ${count('h')} · 표 ${count('table')} · 그림 ${count('img')}`;
-    $('warns').innerHTML = doc.warnings.map(w => `<li>${esc(w)}</li>`).join('');
+    $('warns').innerHTML = doc.warnings.map(w => `<li>${sentenceLines(w)}</li>`).join('');
   } catch (e) {
     console.error(e);
     doc = SAMPLE;
     $('fileinfo').className = 'file error';
-    $('fileinfo').textContent = e.message.match(/[가-힣]/) ? e.message : `읽지 못했어요. 파일이 손상됐거나 지원하지 않는 형식이에요. (${e.message})`;
+    $('fileinfo').innerHTML = sentenceLines(e.message.match(/[가-힣]/) ? e.message : `읽지 못했어요. 파일이 손상됐거나 지원하지 않는 형식이에요. (${e.message})`);
   }
   renderThemes();
   render();
