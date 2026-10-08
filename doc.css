@@ -1,3 +1,12 @@
+/* ko-linebreak:2026-10-08 한국어 줄바꿈 기본값. lang="ko" 인 글에만 적용 */
+[lang|="ko"] { word-break: keep-all; line-break: strict; overflow-wrap: break-word; }
+:where(h1, h2, h3, h4, caption, figcaption, th):where(:lang(ko)) { text-wrap-style: balance; }
+:where(p, li, dd, td, blockquote, .note):where(:lang(ko)) { text-wrap-style: pretty; }
+:where(code, .url):where(:lang(ko)) { overflow-wrap: anywhere; }
+:where(button, .btn, .badge, .chip):where(:lang(ko)) { white-space: nowrap; }
+:where(.user-text):where(:lang(ko)) { white-space: pre-line; }
+/* /ko-linebreak */
+
 /* 변환 결과 미리보기와 PDF 인쇄에 같이 쓰는 스타일. 값은 write.js THEMES와 맞춘다 */
 @font-face { font-family: Pretendard; src: url(vendor/PretendardVariable.woff2) format('woff2-variations'); font-weight: 45 920; font-display: swap; }
 @font-face { font-family: 'Paperlogy 4 Regular'; src: url(vendor/Paperlogy-400.woff2) format('woff2'); font-weight: 400; font-display: swap; }

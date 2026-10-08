@@ -544,13 +544,13 @@ function pdfHtml(theme, meta, opt) {
   const fontsLink = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap">';
   if (theme.deck) {
     // 슬라이드 양식은 16:9 한 장이 PDF 한 쪽
-    return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
+    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
       <link rel="stylesheet" href="doc.css">${fontsLink}<style>@page{size:13.333in 7.5in;margin:0}body{margin:0}.slide{break-after:page}</style></head>
       <body>${slidesHtml(doc, theme, meta, opt)}</body></html>`;
   }
   const css = s => '"' + String(s).replace(/["\\]/g, '\\$&') + '"';
   const box = `font:7.5pt Pretendard,sans-serif;color:#${theme.label};vertical-align:top;padding-top:3mm;border-top:.5pt solid #${theme.hair}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
+  return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(meta.title)}</title><base href="${esc(location.href)}">
     <link rel="stylesheet" href="doc.css"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap">
     <style>body{margin:0}
     @page{size:A4;margin:${theme.wide ? '28mm 26mm 20mm' : '25mm 22mm 20mm'};@bottom-left{content:${css(meta.title)};${box}}@bottom-right{content:counter(page);${box}}}
