@@ -7,7 +7,8 @@
 const MAX_IMG = 1600; // 긴 변 픽셀. 원본 그대로 넣으면 수백 MB가 된다
 
 async function readDocument(file) {
-  const ext = file.name.split('.').pop().toLowerCase();
+  const name = file.name.normalize('NFC'); // 맥 파일 이름은 자모가 풀린 NFD라 Office에서 ㄹㅗㅂ처럼 흩어짐
+  const ext = name.split('.').pop().toLowerCase();
   const buf = await file.arrayBuffer();
   const doc = { title: '', subtitle: '', blocks: [], warnings: [], source: ext };
   if (ext === 'docx') await readDocx(buf, doc);
@@ -20,7 +21,7 @@ async function readDocument(file) {
   dropSourceToc(doc);
   inferHeadings(doc);
   detectNotes(doc);
-  if (!doc.title) doc.title = file.name.replace(/\.[^.]+$/, '');
+  if (!doc.title) doc.title = name.replace(/\.[^.]+$/, '');
   if (!doc.blocks.length) doc.warnings.push('문서에서 내용을 찾지 못했어요.');
   doc.blocks = doc.blocks.map((b, id) => ({ ...b, id })); // 미리보기에서 고친 글을 되돌려 넣을 번호
   return doc;
