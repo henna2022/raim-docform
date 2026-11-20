@@ -518,7 +518,7 @@ function slideLayout(doc, theme, meta, opt) {
     const cover = () => {
       const center = S === 'frame', al = center ? 'center' : 'left';
       const it = [];
-      if (S === 'accent') it.push(rect(0, 0.9, SW * 0.62, 0.9, { fill: accent }), logoAt(mx, 1.12, 0.46, { white: true }) || T(mx, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
+      if (S === 'accent') it.push(rect(0, 0.9, SW, 0.9, { fill: accent }), logoAt(mx, 1.12, 0.46, { white: true }) || T(mx, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
       else it.push(logoAt(mx, 2.08, 0.46, { center }) || T(mx, 2.25, cw, 0.35, [p(ORG, { b: true })], { size: 13, color: theme.label, align: al }));
       it.push(T(mx, 2.7, cw, 1.1, [p(meta.title, { b: true }, { meta: 'title' })], { size: ed ? 44 : 40, font: f.head, align: al }));
       if (meta.subtitle) it.push(T(mx, 3.95, cw, 0.4, [p(meta.subtitle, {}, { meta: 'subtitle' })], { size: 15, color: theme.sub, align: al }));
@@ -638,7 +638,7 @@ function slideLayout(doc, theme, meta, opt) {
   if (opt.cover) {
     const al = theme.center ? 'center' : 'left';
     const s = [];
-    if (theme.band) s.push({ k: 'rect', x: 0, y: 0.9, w: SW * 0.62, h: 0.9, fill: theme.accent }, logoAt(MX, 1.12, 0.46, { white: true }) || T(MX, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
+    if (theme.band) s.push({ k: 'rect', x: 0, y: 0.9, w: SW, h: 0.9, fill: theme.accent }, logoAt(MX, 1.12, 0.46, { white: true }) || T(MX, 1.2, 7, 0.35, [p(ORG, { b: true })], { size: 13, color: 'FFFFFF' }));
     else s.push(logoAt(MX, 1.9, 0.46, { center: theme.center }) || T(MX, 2.05, CW, 0.35, [p(ORG, { b: true })], { size: 13, color: theme.label, align: al }));
     s.push(T(MX, 2.5, CW, 1.2, [p(meta.title, { b: true }, { meta: 'title' })], { size: Math.min(40, theme.titlePt + 12), font: f.head, align: al, valign: 'bottom' }));
     if (meta.subtitle) s.push(T(MX, 3.8, CW, 0.45, [p(meta.subtitle, {}, { meta: 'subtitle' })], { size: 15, color: theme.sub, align: al }));
