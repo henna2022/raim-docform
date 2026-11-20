@@ -276,7 +276,7 @@ async function toDocx(doc, theme, meta, opt) {
   return fixKoreanWrap(await D.Packer.toBlob(document), 'docx', tocXml);
 }
 
-// 한글이 글자 단위로 잘리지 않게 어절 단위 줄바꿈을 켠다 (Word wordWrap=0, PowerPoint eaLnBrk=0)
+// 한글이 글자 단위로 잘리지 않게 어절 단위 줄바꿈을 켠다 (Word wordWrap 켬, PowerPoint eaLnBrk=0). Word wordWrap 0은 글자 단위 잘림 허용이라 쓰면 안 됨
 async function fixKoreanWrap(blob, kind, tocXml = '') {
   const zip = await JSZip.loadAsync(blob);
   if (kind === 'docx') {
@@ -286,9 +286,9 @@ async function fixKoreanWrap(blob, kind, tocXml = '') {
     }
     const p = 'word/styles.xml';
     let s = await zip.file(p).async('string');
-    s = s.replace(/<w:pPrDefault>\s*<w:pPr>/, '$&<w:kinsoku w:val="1"/><w:wordWrap w:val="0"/><w:overflowPunct w:val="1"/>')
-      .replace(/<w:pPrDefault\/>|<w:pPrDefault>\s*<\/w:pPrDefault>/, '<w:pPrDefault><w:pPr><w:kinsoku w:val="1"/><w:wordWrap w:val="0"/><w:overflowPunct w:val="1"/></w:pPr></w:pPrDefault>');
-    if (!s.includes('w:wordWrap')) s = s.replace(/<w:docDefaults>/, '$&<w:pPrDefault><w:pPr><w:kinsoku w:val="1"/><w:wordWrap w:val="0"/><w:overflowPunct w:val="1"/></w:pPr></w:pPrDefault>');
+    s = s.replace(/<w:pPrDefault>\s*<w:pPr>/, '$&<w:kinsoku w:val="1"/><w:wordWrap/><w:overflowPunct w:val="1"/>')
+      .replace(/<w:pPrDefault\/>|<w:pPrDefault>\s*<\/w:pPrDefault>/, '<w:pPrDefault><w:pPr><w:kinsoku w:val="1"/><w:wordWrap/><w:overflowPunct w:val="1"/></w:pPr></w:pPrDefault>');
+    if (!s.includes('w:wordWrap')) s = s.replace(/<w:docDefaults>/, '$&<w:pPrDefault><w:pPr><w:kinsoku w:val="1"/><w:wordWrap/><w:overflowPunct w:val="1"/></w:pPr></w:pPrDefault>');
     zip.file(p, s);
   } else {
     for (const n of Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
